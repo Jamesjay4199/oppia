@@ -1,1 +1,1 @@
-# Adding another job file is not a bad idea.
+# Adding another job file is not a totally bad idea.
