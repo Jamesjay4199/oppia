@@ -34,7 +34,7 @@ import utils
         models.NAMES.feedback, models.NAMES.user]))
 datastore_services = models.Registry.import_datastore_services()
 
-
+# More changes
 _LANGUAGES_TO_RESET = ['hu', 'mk', 'sv', 'tr', 'de', 'fr', 'nl', 'pt']
 
 
