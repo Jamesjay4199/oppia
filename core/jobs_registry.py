@@ -40,7 +40,7 @@ from core.domain import user_jobs_one_off
 import python_utils
 
 # List of all manager classes for one-off batch jobs for which to show controls
-# on the admin dashboard.
+# on the admin dashboard.?
 ONE_OFF_JOB_MANAGERS = [
     activity_jobs_one_off.ActivityContributorsSummaryOneOffJob,
     activity_jobs_one_off.AuditContributorsOneOffJob,
