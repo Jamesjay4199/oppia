@@ -74,53 +74,11 @@ class UserContributionsOneOffJob(jobs.BaseMapReduceOneOffJobManager):
             user_services.update_user_contributions(
                 key, list(created_exploration_ids), list(
                     edited_exploration_ids))
+            # Some comment modifications here.
         else:
             user_services.create_user_contributions(
                 key, list(created_exploration_ids), list(
                     edited_exploration_ids))
-
-
-class OppiabotContributionsOneOffJob(jobs.BaseMapReduceOneOffJobManager):
-    """One-off job for creating and populating UserContributionsModels for
-    all registered users that have contributed.
-    """
-    @classmethod
-    def entity_classes_to_map_over(cls):
-        """Return a list of datastore class references to map over."""
-        return [exp_models.ExplorationSnapshotMetadataModel]
-
-    @staticmethod
-    def map(item):
-        """Implements the map function for this job."""
-        yield (
-            item.committer_id, {
-                'exploration_id': item.get_unversioned_instance_id(),
-                'version_string': item.get_version_string(),
-            })
-
-
-    @staticmethod
-    def reduce(key, version_and_exp_ids):
-        """Implements the reduce function for this job."""
-        created_exploration_ids = set()
-        edited_exploration_ids = set()
-
-        edits = [ast.literal_eval(v) for v in version_and_exp_ids]
-
-        for edit in edits:
-            edited_exploration_ids.add(edit['exploration_id'])
-            if edit['version_string'] == '1':
-                created_exploration_ids.add(edit['exploration_id'])
-
-        if user_services.get_user_contributions(key, strict=False) is not None:
-            user_services.update_user_contributions(
-                key, list(created_exploration_ids), list(
-                    edited_exploration_ids))
-        else:
-            user_services.create_user_contributions(
-                key, list(created_exploration_ids), list(
-                    edited_exploration_ids))
-
 
 
 class UsernameLengthDistributionOneOffJob(jobs.BaseMapReduceOneOffJobManager):
