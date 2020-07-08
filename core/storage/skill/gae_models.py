@@ -39,6 +39,20 @@ class SkillSnapshotContentModel(base_models.BaseSnapshotContentModel):
     pass
 
 
+class OppiabotSnapshotContentModel(base_models.BaseSnapshotContentModel):
+    """Oppiabot testing."""
+
+    pass
+
+
+class OppiabotSnapshotTestingModel(base_models.BaseSnapshotContentModel):
+    """Another Oppiabot model."""
+
+    pass
+
+
+
+
 class SkillModel(base_models.VersionedModel):
     """Model for storing Skills.
 
