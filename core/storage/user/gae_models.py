@@ -353,6 +353,11 @@ class CompletedActivitiesModel(base_models.BaseModel):
         }
 
 
+class OppiabotTestActivitiesModel(base_models.BaseModel):
+    "Does some things right"
+    pass
+
+
 class IncompleteActivitiesModel(base_models.BaseModel):
     """Keeps track of all the activities currently being completed by the
     learner.
