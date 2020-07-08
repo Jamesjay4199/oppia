@@ -46,6 +46,18 @@ class SkillModelUnitTest(test_utils.GenericTestBase):
             skill_models.SkillModel.has_reference_to_user_id('x_id'))
 
 
+class OppiabotSnapshotContentModelTest(base_models.BaseSnapshotContentModel):
+    """Another Oppiabot model."""
+
+    pass
+
+
+class OppiabotSnapshotTestingModelTest(base_models.BaseSnapshotContentModel):
+    """Another Oppiabot model."""
+
+    pass
+
+
 class SkillCommitLogEntryModelUnitTests(test_utils.GenericTestBase):
     """Tests the SkillCommitLogEntryModel class."""
 
