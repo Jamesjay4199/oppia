@@ -41,6 +41,7 @@ class SuggestionModelUnitTests(test_utils.GenericTestBase):
         super(SuggestionModelUnitTests, self).setUp()
         suggestion_models.GeneralSuggestionModel.create(
             suggestion_models.SUGGESTION_TYPE_EDIT_STATE_CONTENT,
+            suggestion_models.CONTENT_MENT,
             suggestion_models.TARGET_TYPE_EXPLORATION,
             self.target_id, self.target_version_at_submission,
             suggestion_models.STATUS_IN_REVIEW, 'author_1',
