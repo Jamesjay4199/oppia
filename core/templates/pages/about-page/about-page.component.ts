@@ -35,6 +35,7 @@ interface CreditNames {
   templateUrl: './about-page.component.html'
 })
 export class AboutPageComponent implements OnInit {
+  // @ts-ignore Should ignore something right?
   aboutPageMascotImgUrl: string;
   activeTabName: string;
   allCredits: Array<CreditNames> = [];
