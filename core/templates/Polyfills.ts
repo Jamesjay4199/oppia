@@ -133,7 +133,7 @@ if (navigator.mediaDevices.getUserMedia === undefined) {
       // @ts-ignore: 'webkitGetUserMedia' and 'mozGetUserMedia'
       // property does not exist error.
       navigator.webkitGetUserMedia || navigator.mozGetUserMedia);
-
+      // Does not add a new ts-ignore.
     // If getUserMedia is not implemented, return a rejected promise
     // with an error to keep a consistent interface.
     if (!getUserMedia) {

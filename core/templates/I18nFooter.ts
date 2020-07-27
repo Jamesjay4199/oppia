@@ -23,6 +23,7 @@ require('services/translation-file-hash-loader.service.ts');
 angular.module('oppia').directive('i18nFooter', [
   function() {
     return {
+      // @ts-ignore Some other ts-ignore file.
       restrict: 'E',
       scope: {},
       bindToController: {},
