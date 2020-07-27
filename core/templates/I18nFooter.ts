@@ -21,7 +21,7 @@
 require('services/translation-file-hash-loader.service.ts');
 
 angular.module('oppia').directive('i18nFooter', [
-  function () {
+  function() {
     return {
       // @ts-ignore Some other ts-ignore file.
       restrict: 'E',
@@ -30,64 +30,47 @@ angular.module('oppia').directive('i18nFooter', [
       template: require('./i18n-footer.directive.html'),
       controllerAs: '$ctrl',
       controller: [
-        '$http',
-        '$timeout',
-        '$translate',
-        'I18nLanguageCodeService',
-        'UserService',
-        'SUPPORTED_SITE_LANGUAGES',
-        function (
-          $http,
-          $timeout,
-          $translate,
-          I18nLanguageCodeService,
-          UserService,
-          SUPPORTED_SITE_LANGUAGES
-        ) {
+        '$http', '$timeout', '$translate', 'I18nLanguageCodeService',
+        'UserService', 'SUPPORTED_SITE_LANGUAGES',
+        function(
+            $http, $timeout, $translate, I18nLanguageCodeService,
+            UserService, SUPPORTED_SITE_LANGUAGES) {
           var ctrl = this;
           // Making a changees
           // Changes the language of the translations.
           var preferencesDataUrl = '/preferenceshandler/data';
           var siteLanguageUrl = '/save_site_language';
-          ctrl.changeLanguage = function () {
+          ctrl.changeLanguage = function() {
             $translate.use(ctrl.currentLanguageCode);
             I18nLanguageCodeService.setI18nLanguageCode(
-              ctrl.currentLanguageCode
-            );
-            UserService.getUserInfoAsync().then(function (userInfo) {
+              ctrl.currentLanguageCode);
+            UserService.getUserInfoAsync().then(function(userInfo) {
               if (userInfo.isLoggedIn()) {
                 $http.put(siteLanguageUrl, {
-                  site_language_code: ctrl.currentLanguageCode,
+                  site_language_code: ctrl.currentLanguageCode
                 });
               }
             });
           };
-          ctrl.$onInit = function () {
+          ctrl.$onInit = function() {
             ctrl.supportedSiteLanguages = SUPPORTED_SITE_LANGUAGES;
-            ctrl.currentLanguageCode =
-              $translate.proposedLanguage() || $translate.use();
+            ctrl.currentLanguageCode = (
+              $translate.proposedLanguage() || $translate.use());
             I18nLanguageCodeService.setI18nLanguageCode(
-              ctrl.currentLanguageCode
-            );
+              ctrl.currentLanguageCode);
           };
-        },
-      ],
+        }
+      ]
     };
-  },
-]);
+  }]);
+
 
 angular.module('oppia').config([
-  '$translateProvider',
-  'DEFAULT_TRANSLATIONS',
-  'SUPPORTED_SITE_LANGUAGES',
-  function (
-    $translateProvider,
-    DEFAULT_TRANSLATIONS,
-    SUPPORTED_SITE_LANGUAGES
-  ) {
+  '$translateProvider', 'DEFAULT_TRANSLATIONS', 'SUPPORTED_SITE_LANGUAGES',
+  function($translateProvider, DEFAULT_TRANSLATIONS, SUPPORTED_SITE_LANGUAGES) {
     var availableLanguageKeys = [];
     var availableLanguageKeysMap = {};
-    SUPPORTED_SITE_LANGUAGES.forEach(function (language) {
+    SUPPORTED_SITE_LANGUAGES.forEach(function(language) {
       availableLanguageKeys.push(language.id);
       availableLanguageKeysMap[language.id + '*'] = language.id;
     });
@@ -95,12 +78,10 @@ angular.module('oppia').config([
 
     $translateProvider
       .registerAvailableLanguageKeys(
-        availableLanguageKeys,
-        availableLanguageKeysMap
-      )
+        availableLanguageKeys, availableLanguageKeysMap)
       .useLoader('TranslationFileHashLoaderService', {
         prefix: '/i18n/',
-        suffix: '.json',
+        suffix: '.json'
       })
       // The use of default translation improves the loading time when English
       // is selected.
@@ -118,5 +99,5 @@ angular.module('oppia').config([
       // hyperlinks.
       .useSanitizeValueStrategy('sanitizeParameters')
       .forceAsyncReload(true);
-  },
+  }
 ]);
