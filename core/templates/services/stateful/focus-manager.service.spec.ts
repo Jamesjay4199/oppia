@@ -26,15 +26,19 @@ require('services/id-generation.service.ts');
 require('services/contextual/device-info.service.ts');
 require('services/stateful/focus-manager.service.ts');
 
+import { Subscription } from 'rxjs';
+
 describe('Focus Manager Service', function() {
   var FocusManagerService;
   var DeviceInfoService;
   var IdGenerationService;
-  var rootScope;
   var $timeout;
   var clearLabel;
   var focusLabel = 'FocusLabel';
   var focusLabelTwo = 'FocusLabelTwo';
+
+  var focusOnSpy = null;
+  var testSubscriptions = null;
 
   beforeEach(angular.mock.module('oppia'));
   beforeEach(angular.mock.module('oppia', function($provide) {
@@ -48,10 +52,15 @@ describe('Focus Manager Service', function() {
     FocusManagerService = $injector.get('FocusManagerService');
     DeviceInfoService = $injector.get('DeviceInfoService');
     IdGenerationService = $injector.get('IdGenerationService');
-    rootScope = $injector.get('$rootScope');
     $timeout = $injector.get('$timeout');
-    spyOn(rootScope, '$broadcast');
   }));
+
+  beforeEach(() => {
+    focusOnSpy = jasmine.createSpy('focusOn');
+    testSubscriptions = new Subscription();
+    testSubscriptions.add(
+      FocusManagerService.onFocus.subscribe(focusOnSpy));
+  });
 
   it('should generate a random string for focus label', function() {
     spyOn(IdGenerationService, 'generateNewId');
@@ -62,7 +71,7 @@ describe('Focus Manager Service', function() {
   it('should set focus label and broadcast it', function() {
     FocusManagerService.setFocus(focusLabel);
     $timeout(function() {
-      expect(rootScope.$broadcast).toHaveBeenCalledWith('focusOn', focusLabel);
+      expect(focusOnSpy).toHaveBeenCalledWith(focusLabel);
     });
     $timeout.flush();
   });
@@ -72,13 +81,13 @@ describe('Focus Manager Service', function() {
     expect(FocusManagerService.setFocus(focusLabelTwo)).toEqual(undefined);
     $timeout.flush();
     $timeout.verifyNoPendingTasks();
-    expect(rootScope.$broadcast).toHaveBeenCalledWith('focusOn', focusLabel);
+    expect(focusOnSpy).toHaveBeenCalledWith(focusLabel);
   });
 
   it('should set label to clear focus and broadcast it', function() {
     FocusManagerService.clearFocus();
     $timeout(function() {
-      expect(rootScope.$broadcast).toHaveBeenCalledWith('focusOn', clearLabel);
+      expect(focusOnSpy).toHaveBeenCalledWith(clearLabel);
     });
     $timeout.flush();
   });
@@ -87,8 +96,7 @@ describe('Focus Manager Service', function() {
     FocusManagerService.setFocusIfOnDesktop(focusLabel);
     if (!DeviceInfoService.isMobileDevice()) {
       $timeout(function() {
-        expect(rootScope.$broadcast).toHaveBeenCalledWith(
-          'focusOn', focusLabel);
+        expect(focusOnSpy).toHaveBeenCalledWith(focusLabel);
       });
       $timeout.flush();
     }

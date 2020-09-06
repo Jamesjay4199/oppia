@@ -247,7 +247,6 @@ class BaseModelUnitTests(test_utils.GenericTestBase):
             model = base_models.BaseModel.get_by_id(model_id)
             self.assertNotEqual(model.last_updated, last_updated)
 
-
     def test_get_multi(self):
         model1 = base_models.BaseModel()
         model2 = base_models.BaseModel()
@@ -342,11 +341,28 @@ class BaseSnapshotMetadataModelTests(test_utils.GenericTestBase):
 
     def test_exists_for_user_id(self):
         model1 = base_models.BaseSnapshotMetadataModel(
-            id='model_id-1', committer_id='committer_id', commit_type='create')
+            id='model_id-1',
+            committer_id='committer_id',
+            commit_type='create',
+            commit_cmds_user_ids=[
+                'commit_cmds_user_1_id', 'commit_cmds_user_2_id'],
+            content_user_ids=['content_user_1_id', 'content_user_2_id'])
         model1.put()
         self.assertTrue(
             base_models.BaseSnapshotMetadataModel
             .exists_for_user_id('committer_id'))
+        self.assertTrue(
+            base_models.BaseSnapshotMetadataModel
+            .exists_for_user_id('commit_cmds_user_1_id'))
+        self.assertTrue(
+            base_models.BaseSnapshotMetadataModel
+            .exists_for_user_id('commit_cmds_user_2_id'))
+        self.assertTrue(
+            base_models.BaseSnapshotMetadataModel
+            .exists_for_user_id('content_user_1_id'))
+        self.assertTrue(
+            base_models.BaseSnapshotMetadataModel
+            .exists_for_user_id('content_user_2_id'))
         self.assertFalse(
             base_models.BaseSnapshotMetadataModel
             .exists_for_user_id('x_id'))
@@ -384,15 +400,10 @@ class BaseSnapshotMetadataModelTests(test_utils.GenericTestBase):
             'model_id-1': {
                 'commit_type': 'create',
                 'commit_message': None,
-                'commit_cmds': None
             },
             'model_id-2': {
                 'commit_type': 'create',
                 'commit_message': 'Hi this is a commit.',
-                'commit_cmds': [
-                    {'cmd': 'some_command'},
-                    {'cmd2': 'another_command'}
-                ]
             }
         }
         self.assertEqual(user_data, expected_data)

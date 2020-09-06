@@ -22,7 +22,6 @@ var users = require('../protractor_utils/users.js');
 var waitFor = require('../protractor_utils/waitFor.js');
 var workflow = require('../protractor_utils/workflow.js');
 
-var AdminPage = require('../protractor_utils/AdminPage.js');
 var Constants = require('../protractor_utils/ProtractorConstants.js');
 var TopicsAndSkillsDashboardPage =
   require('../protractor_utils/TopicsAndSkillsDashboardPage.js');
@@ -97,7 +96,7 @@ describe('Topic editor functionality', function() {
 
     await topicEditorPage.get(topicId);
     await topicEditorPage.moveToQuestionsTab();
-    await topicEditorPage.createQuestionForSkillWithIndex(0);
+    await topicEditorPage.createQuestionForSkillWithName('Skill 1');
     await explorationEditorMainTab.setContent(
       await forms.toRichText('Question 1'));
     await explorationEditorMainTab.setInteraction(

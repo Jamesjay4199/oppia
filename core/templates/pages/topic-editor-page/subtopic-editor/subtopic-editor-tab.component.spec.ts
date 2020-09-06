@@ -17,6 +17,8 @@
  * @fileoverview Unit tests for the subtopic editor tab component.
  */
 
+import { EventEmitter } from '@angular/core';
+
 import { UpgradedServices } from 'services/UpgradedServices';
 
 describe('Subtopic editor tab', function() {
@@ -28,46 +30,33 @@ describe('Subtopic editor tab', function() {
       $provide.value(key, value);
     }
   }));
-  var $scope = null;
   var ctrl = null;
-  var $rootScope = null;
-  var ContextService = null;
   var skillSummary = null;
-  var ImageUploadHelperService = null;
-  var directive = null;
   var TopicEditorStateService = null;
   var TopicUpdateService = null;
-  var EntityCreationService = null;
   var SubtopicValidationService = null;
   var TopicEditorRoutingService = null;
-  var WindowDimensionsService = null;
   var TopicObjectFactory = null;
   var SubtopicObjectFactory = null;
-  var QuestionBackendApiService = null;
   var ShortSkillSummaryObjectFactory = null;
   var SubtopicPageObjectFactory = null;
   var MockWindowDimensionsService = {
     isWindowNarrow: () => false
   };
 
+  var topicInitializedEventEmitter = null;
+  var topicReinitializedEventEmitter = null;
+
   beforeEach(angular.mock.inject(function($injector, $componentController) {
-    $rootScope = $injector.get('$rootScope');
-    $scope = $rootScope.$new();
-    ContextService = $injector.get('ContextService');
     TopicEditorStateService = $injector.get('TopicEditorStateService');
     TopicUpdateService = $injector.get('TopicUpdateService');
     SubtopicValidationService = $injector.get('SubtopicValidationService');
-    EntityCreationService = $injector.get('EntityCreationService');
     TopicEditorRoutingService = $injector.get('TopicEditorRoutingService');
     SubtopicObjectFactory = $injector.get('SubtopicObjectFactory');
     SubtopicPageObjectFactory = $injector.get('SubtopicPageObjectFactory');
-    WindowDimensionsService = $injector.get('WindowDimensionsService');
     ShortSkillSummaryObjectFactory = $injector.get(
       'ShortSkillSummaryObjectFactory');
     TopicObjectFactory = $injector.get('TopicObjectFactory');
-    ImageUploadHelperService = $injector.get('ImageUploadHelperService');
-    QuestionBackendApiService = $injector.get('QuestionBackendApiService');
-    directive = $injector.get('subtopicEditorTabDirective')[0];
 
     var MockQuestionBackendApiService = {
       fetchTotalQuestionCountForSkillIds: () => Promise.resolve(2)
@@ -82,11 +71,25 @@ describe('Subtopic editor tab', function() {
     var subtopicPage = SubtopicPageObjectFactory.createDefault('asd2r42', '1');
     topic._id = 'sndsjfn42';
 
+    topicInitializedEventEmitter = new EventEmitter();
+    topicReinitializedEventEmitter = new EventEmitter();
+
+    spyOnProperty(TopicEditorStateService, 'onTopicInitialized').and.callFake(
+      function() {
+        return topicInitializedEventEmitter;
+      });
+    spyOnProperty(
+      TopicEditorStateService, 'onTopicReinitialized').and.callFake(
+      function() {
+        return topicReinitializedEventEmitter;
+      });
+
     topic.getSubtopicById = function() {
       return subtopic;
     };
     spyOn(TopicEditorStateService, 'getTopic').and.returnValue(topic);
-    spyOn(TopicEditorStateService,
+    spyOn(
+      TopicEditorStateService,
       'getSubtopicPage').and.returnValue(subtopicPage);
     spyOn(TopicEditorRoutingService, 'getSubtopicIdFromUrl')
       .and.returnValue('1');
@@ -96,6 +99,10 @@ describe('Subtopic editor tab', function() {
     });
     ctrl.$onInit();
   }));
+
+  afterEach(() => {
+    ctrl.$onDestroy();
+  });
 
   it('should initialize the variables', function() {
     expect(ctrl.editableTitle).toEqual('Subtopic1');
@@ -194,12 +201,6 @@ describe('Subtopic editor tab', function() {
     var skillSummary = ShortSkillSummaryObjectFactory.create(
       '1', 'Skill description');
     expect(ctrl.isSkillDeleted(skillSummary)).toEqual(false);
-  });
-
-  it('should call SkillCreationService to create skill', function() {
-    var skillSpy = spyOn(EntityCreationService, 'createSkill');
-    ctrl.createSkill();
-    expect(skillSpy).toHaveBeenCalled();
   });
 
   it('should call TopicUpdateService when skill is rearranged',
@@ -320,6 +321,14 @@ describe('Subtopic editor tab', function() {
       ctrl.navigateToTopicEditor();
       expect(navigateSpy).toHaveBeenCalled();
     });
+
+  it('should call initEditor when topic is initialized', function() {
+    spyOn(ctrl, 'initEditor').and.callThrough();
+    topicInitializedEventEmitter.emit();
+    expect(ctrl.initEditor).toHaveBeenCalledTimes(1);
+    topicReinitializedEventEmitter.emit();
+    expect(ctrl.initEditor).toHaveBeenCalledTimes(2);
+  });
 
   it('should hide the html data input on canceling', function() {
     ctrl.schemaEditorIsShown = true;

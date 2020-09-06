@@ -63,7 +63,6 @@ describe('Compare versions service', function() {
   describe('compare versions service', function() {
     var cvs = null;
     let vts: VersionTreeService = null;
-    var treeParents = null;
     var $httpBackend = null;
     var mockExplorationData = null;
 
@@ -178,7 +177,7 @@ describe('Compare versions service', function() {
                 param_changes: [],
                 refresher_exploration_id: null
               },
-              rule_specs: []
+              rule_specs: [],
             };
           });
         statesData[stateName] = newStateData;

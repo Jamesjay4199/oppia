@@ -84,8 +84,11 @@ require('services/editability.service.ts');
 require('services/exploration-html-formatter.service.ts');
 require('services/generate-content-id.service.ts');
 require('services/html-escaper.service.ts');
+require('services/contextual/window-dimensions.service.ts');
+require('services/external-save.service.ts');
 
 import { Subscription } from 'rxjs';
+
 
 angular.module('oppia').directive('stateResponses', [
   'UrlInterpolationService', function(UrlInterpolationService) {
@@ -106,24 +109,26 @@ angular.module('oppia').directive('stateResponses', [
         '/components/state-editor/state-responses-editor/' +
         'state-responses.directive.html'),
       controller: [
-        '$filter', '$rootScope', '$scope', '$uibModal', 'AlertsService',
-        'AnswerGroupObjectFactory', 'ContextService',
-        'EditabilityService', 'ResponsesService',
+        '$filter', '$scope', '$uibModal', 'AlertsService',
+        'AnswerGroupObjectFactory',
+        'EditabilityService', 'ExternalSaveService', 'ResponsesService',
         'StateCustomizationArgsService', 'StateEditorService',
         'StateInteractionIdService', 'StateNextContentIdIndexService',
         'StateSolicitAnswerDetailsService',
-        'UrlInterpolationService', 'ENABLE_SOLICIT_ANSWER_DETAILS_FEATURE',
+        'UrlInterpolationService', 'WindowDimensionsService',
+        'ENABLE_SOLICIT_ANSWER_DETAILS_FEATURE',
         'INTERACTION_IDS_WITHOUT_ANSWER_DETAILS', 'INTERACTION_SPECS',
         'PLACEHOLDER_OUTCOME_DEST', 'RULE_SUMMARY_WRAP_CHARACTER_COUNT',
         'SHOW_TRAINABLE_UNRESOLVED_ANSWERS',
         function(
-            $filter, $rootScope, $scope, $uibModal, AlertsService,
-            AnswerGroupObjectFactory, ContextService,
-            EditabilityService, ResponsesService,
+            $filter, $scope, $uibModal, AlertsService,
+            AnswerGroupObjectFactory,
+            EditabilityService, ExternalSaveService, ResponsesService,
             StateCustomizationArgsService, StateEditorService,
             StateInteractionIdService, StateNextContentIdIndexService,
             StateSolicitAnswerDetailsService,
-            UrlInterpolationService, ENABLE_SOLICIT_ANSWER_DETAILS_FEATURE,
+            UrlInterpolationService, WindowDimensionsService,
+            ENABLE_SOLICIT_ANSWER_DETAILS_FEATURE,
             INTERACTION_IDS_WITHOUT_ANSWER_DETAILS, INTERACTION_SPECS,
             PLACEHOLDER_OUTCOME_DEST, RULE_SUMMARY_WRAP_CHARACTER_COUNT,
             SHOW_TRAINABLE_UNRESOLVED_ANSWERS) {
@@ -133,8 +138,6 @@ angular.module('oppia').directive('stateResponses', [
             if (StateEditorService.isInQuestionMode()) {
               return;
             }
-            var explorationId = ContextService.getExplorationId();
-            var currentStateName = $scope.stateName;
           };
 
           $scope.isInQuestionMode = function() {
@@ -197,8 +200,7 @@ angular.module('oppia').directive('stateResponses', [
                       if (rule.type === 'Equals' ||
                           rule.type === 'ContainsAtLeastOneOf') {
                         handledAnswersArray[choiceIndex] = true;
-                      } else if (rule.type ===
-                        'DoesNotContainAtLeastOneOf') {
+                      } else if (rule.type === 'DoesNotContainAtLeastOneOf') {
                         for (var i = 0; i < handledAnswersArray.length; i++) {
                           if (i !== choiceIndex) {
                             handledAnswersArray[i] = true;
@@ -247,7 +249,7 @@ angular.module('oppia').directive('stateResponses', [
           };
 
           $scope.changeActiveAnswerGroupIndex = function(newIndex) {
-            $rootScope.$broadcast('externalSave');
+            ExternalSaveService.onExternalSave.emit();
             ResponsesService.changeActiveAnswerGroupIndex(newIndex);
             $scope.activeAnswerGroupIndex = (
               ResponsesService.getActiveAnswerGroupIndex());
@@ -300,7 +302,7 @@ angular.module('oppia').directive('stateResponses', [
 
           $scope.openAddAnswerGroupModal = function() {
             AlertsService.clearWarnings();
-            $rootScope.$broadcast('externalSave');
+            ExternalSaveService.onExternalSave.emit();
             var stateName = StateEditorService.getActiveStateName();
             var addState = $scope.addState;
             var currentInteractionId = $scope.getCurrentInteractionId();
@@ -315,6 +317,7 @@ angular.module('oppia').directive('stateResponses', [
                 currentInteractionId: () => currentInteractionId,
                 stateName: () => stateName,
               },
+              windowClass: 'add-answer-group-modal',
               controller: 'AddAnswerGroupModalController'
             }).result.then(function(result) {
               // Create a new answer group.
@@ -515,10 +518,16 @@ angular.module('oppia').directive('stateResponses', [
             return outcome && (outcome.dest === activeStateName);
           };
 
+          $scope.toggleResponseCard = function() {
+            $scope.responseCardIsShown = !$scope.responseCardIsShown;
+          };
+
           ctrl.$onInit = function() {
             $scope.SHOW_TRAINABLE_UNRESOLVED_ANSWERS = (
               SHOW_TRAINABLE_UNRESOLVED_ANSWERS);
             $scope.EditabilityService = EditabilityService;
+            $scope.responseCardIsShown = (
+              !WindowDimensionsService.isWindowNarrow());
             $scope.stateName = StateEditorService.getActiveStateName();
             $scope.enableSolicitAnswerDetailsFeature = (
               ENABLE_SOLICIT_ANSWER_DETAILS_FEATURE);
@@ -542,7 +551,7 @@ angular.module('oppia').directive('stateResponses', [
 
                 $scope.activeAnswerGroupIndex = (
                   ResponsesService.getActiveAnswerGroupIndex());
-                $rootScope.$broadcast('externalSave');
+                ExternalSaveService.onExternalSave.emit();
               })
             );
 
@@ -553,8 +562,9 @@ angular.module('oppia').directive('stateResponses', [
             ctrl.directiveSubscriptions.add(
               StateInteractionIdService.onInteractionIdChanged.subscribe(
                 (newInteractionId) => {
-                  $rootScope.$broadcast('externalSave');
-                  ResponsesService.onInteractionIdChanged(newInteractionId,
+                  ExternalSaveService.onExternalSave.emit();
+                  ResponsesService.onInteractionIdChanged(
+                    newInteractionId,
                     function(newAnswerGroups, newDefaultOutcome) {
                       $scope.onSaveInteractionDefaultOutcome(newDefaultOutcome);
                       $scope.onSaveInteractionAnswerGroups(newAnswerGroups);
@@ -592,19 +602,25 @@ angular.module('oppia').directive('stateResponses', [
                   ResponsesService.getActiveAnswerGroupIndex();
                 }
               ));
+            ctrl.directiveSubscriptions.add(
+              StateEditorService.onUpdateAnswerChoices.subscribe(
+                (newAnswerChoices) => {
+                  ResponsesService.updateAnswerChoices(newAnswerChoices);
+                })
+            );
 
-            $scope.$on('updateAnswerChoices', function(evt, newAnswerChoices) {
-              ResponsesService.updateAnswerChoices(newAnswerChoices);
-            });
-            $scope.$on(
-              'handleCustomArgsUpdate',
-              function(evt, newAnswerChoices) {
-                ResponsesService.handleCustomArgsUpdate(
-                  newAnswerChoices, function(newAnswerGroups) {
-                    $scope.onSaveInteractionAnswerGroups(newAnswerGroups);
-                    $scope.refreshWarnings()();
-                  });
-              });
+            ctrl.directiveSubscriptions.add(
+              StateEditorService.onHandleCustomArgsUpdate.subscribe(
+                (newAnswerChoices) => {
+                  ResponsesService.handleCustomArgsUpdate(
+                    newAnswerChoices, function(newAnswerGroups) {
+                      $scope.onSaveInteractionAnswerGroups(newAnswerGroups);
+                      $scope.refreshWarnings()();
+                    });
+                }
+              )
+            );
+
             // When the page is scrolled so that the top of the page is above
             // the browser viewport, there are some bugs in the positioning of
             // the helper. This is a bug in jQueryUI that has not been fixed
@@ -617,7 +633,7 @@ angular.module('oppia').directive('stateResponses', [
               revert: 100,
               tolerance: 'pointer',
               start: function(e, ui) {
-                $rootScope.$broadcast('externalSave');
+                ExternalSaveService.onExternalSave.emit();
                 $scope.changeActiveAnswerGroupIndex(-1);
                 ui.placeholder.height(ui.item.height());
               },

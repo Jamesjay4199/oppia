@@ -34,8 +34,6 @@ describe('Story editor page', function() {
   var $uibModal = null;
   var PageTitleService = null;
   var StoryEditorStateService = null;
-  var StoryEditorNavigationService = null;
-  var EditableStoryBackendApiService = null;
   var StoryObjectFactory = null;
   var UndoRedoService = null;
   var UrlService = null;
@@ -77,11 +75,7 @@ describe('Story editor page', function() {
     $uibModal = $injector.get('$uibModal');
     PageTitleService = $injector.get('PageTitleService');
     StoryEditorStateService = $injector.get('StoryEditorStateService');
-    StoryEditorNavigationService = $injector.get(
-      'StoryEditorNavigationService');
     StoryObjectFactory = $injector.get('StoryObjectFactory');
-    EditableStoryBackendApiService = $injector.get(
-      'EditableStoryBackendApiService');
     UndoRedoService = $injector.get('UndoRedoService');
     UrlService = $injector.get('UrlService');
     story = StoryObjectFactory.createFromBackendDict({
@@ -146,11 +140,11 @@ describe('Story editor page', function() {
       storyInitializedEventEmitter.emit();
       storyReinitializedEventEmitter.emit();
     });
-    spyOnProperty(StoryEditorStateService,
-      'onStoryInitialized').and.returnValue(
+    spyOnProperty(
+      StoryEditorStateService, 'onStoryInitialized').and.returnValue(
       storyInitializedEventEmitter);
-    spyOnProperty(StoryEditorStateService,
-      'onStoryReinitialized').and.returnValue(
+    spyOnProperty(
+      StoryEditorStateService, 'onStoryReinitialized').and.returnValue(
       storyReinitializedEventEmitter);
     spyOn(UrlService, 'getStoryIdFromUrl').and.returnValue('story_1');
     spyOn(PageTitleService, 'setPageTitle').and.callThrough();
@@ -222,11 +216,11 @@ describe('Story editor page', function() {
       storyInitializedEventEmitter.emit();
       storyReinitializedEventEmitter.emit();
     });
-    spyOnProperty(StoryEditorStateService,
-      'onStoryInitialized').and.returnValue(
+    spyOnProperty(
+      StoryEditorStateService, 'onStoryInitialized').and.returnValue(
       storyInitializedEventEmitter);
-    spyOnProperty(StoryEditorStateService,
-      'onStoryReinitialized').and.returnValue(
+    spyOnProperty(
+      StoryEditorStateService, 'onStoryReinitialized').and.returnValue(
       storyReinitializedEventEmitter);
     spyOn(UrlService, 'getStoryIdFromUrl').and.returnValue('story_1');
     spyOn(PageTitleService, 'setPageTitle').and.callThrough();
@@ -303,5 +297,17 @@ describe('Story editor page', function() {
     MockStoryEditorNavigationService.activeTab = 'story_editor';
     MockStoryEditorNavigationService.getActiveTab = () => 'story_editor';
     expect(ctrl.getNavbarText()).toEqual('Story Editor');
+  });
+
+  it('should init page on undo redo change applied', () => {
+    let mockUndoRedoChangeEventEmitter = new EventEmitter();
+    spyOn(UndoRedoService, 'onUndoRedoChangeApplied').and.returnValue(
+      mockUndoRedoChangeEventEmitter);
+    spyOn(UrlService, 'getStoryIdFromUrl').and.returnValue('story_1');
+    spyOn(PageTitleService, 'setPageTitle');
+    ctrl.$onInit();
+    mockUndoRedoChangeEventEmitter.emit();
+    expect(PageTitleService.setPageTitle).toHaveBeenCalled();
+    ctrl.$onDestroy();
   });
 });

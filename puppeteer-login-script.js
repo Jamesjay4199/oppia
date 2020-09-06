@@ -25,8 +25,6 @@ module.exports = async(browser, context) => {
   // Sign into Oppia.
   if (context.url.includes('admin')) {
     await login(context, page);
-  } else if (context.url.includes('emaildashboard')) {
-    await setRoleAdmin(context, page);
   } else if (context.url.includes('collection/0')) {
     await createCollections(context, page);
   } else if (context.url.includes('explore/0')) {
@@ -35,57 +33,24 @@ module.exports = async(browser, context) => {
   await page.close();
 };
 
-
+// Needed to relogin after lighthouse_setup.js.
 const login = async function(context, page) {
   try {
     // eslint-disable-next-line no-console
     console.log('Logging into Oppia...');
     // eslint-disable-next-line dot-notation
-    await page.goto(context.url);
+    await page.goto(context.url, { waitUntil: 'networkidle0' });
+    await page.waitForSelector('#admin');
     await page.click('#admin');
-    await Promise.all([
-      page.waitForNavigation(),
-      page.click('#submit-login'),
-    ]);
-
+    await page.click('#submit-login');
+    await page.waitForSelector('#username');
     await page.type('#username', 'username1');
     await page.click('#terms-checkbox');
-    await page.waitFor(5000);
-
-    await Promise.all([
-      page.waitForNavigation(),
-      await page.click('#signup-submit')
-    ]);
-    // eslint-disable-next-line no-console
-    console.log('Successfully Logged in');
+    await page.waitForSelector('#signup-submit');
+    await page.click('#signup-submit');
+    await page.waitForSelector('.oppia-navbar-dropdown-toggle');
   } catch (e) {
-    // eslint-disable-next-line no-console
-    console.log('Login Failed');
-    // eslint-disable-next-line no-console
-    console.log(e);
-  }
-};
-
-
-const setRoleAdmin = async function(context, page) {
-  try {
-    // eslint-disable-next-line no-console
-    console.log('Changing role to admin...');
-    // eslint-disable-next-line dot-notation
-    await page.goto('http://127.0.0.1:8181/admin#/roles');
-    await page.waitFor(2000);
-    await page.type('#update-role-username-input', 'username1');
-    await page.select('#update-role-input', 'string:ADMIN');
-    await page.waitFor(5000);
-    await page.click('#update-button-id');
-    await page.waitFor(2000);
-    // eslint-disable-next-line no-console
-    console.log('Role changed to admin');
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.log('Changing role to admin failed');
-    // eslint-disable-next-line no-console
-    console.log(e);
+    // Already Signed in.
   }
 };
 
@@ -95,7 +60,7 @@ const createCollections = async function(context, page) {
     // eslint-disable-next-line no-console
     console.log('Creating Collections...');
     // eslint-disable-next-line dot-notation
-    await page.goto('http://127.0.0.1:8181/admin#/roles');
+    await page.goto('http://127.0.0.1:8181/admin#/roles', { waitUntil: 'networkidle0' });
     await page.waitFor(2000);
     await page.type('#update-role-username-textbook', 'username1');
     await page.select('#update-role-input', 'string:COLLECTION_EDITOR');
@@ -124,7 +89,7 @@ const createExplorations = async function(context, page) {
     console.log('Creating Exploration...');
     // Load in Exploration
     // eslint-disable-next-line dot-notation
-    await page.goto('http://127.0.0.1:8181/admin');
+    await page.goto('http://127.0.0.1:8181/admin', { waitUntil: 'networkidle0' });
     await page.waitFor(2000);
     await page.evaluate('window.confirm = () => true');
     await page.click(
