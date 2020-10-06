@@ -19,9 +19,6 @@
 require(
   'pages/exploration-player-page/services/exploration-player-state.service.ts');
 require(
-  'pages/exploration-player-page/services/' +
-  'hints-and-solution-manager.service.ts');
-require(
   'pages/exploration-player-page/services/hint-and-solution-modal.service.ts');
 require(
   'pages/exploration-player-page/services/learner-answer-info.service.ts');
