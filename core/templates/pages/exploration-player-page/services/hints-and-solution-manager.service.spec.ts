@@ -20,22 +20,20 @@ import { EventEmitter } from '@angular/core';
 
 // TODO(#7222): Remove the following block of unnnecessary imports once
 // hints-and-solution-manager.service.spec.ts is upgraded to Angular 8.
-import { FractionObjectFactory } from 'domain/objects/FractionObjectFactory';
+// import { FractionObjectFactory } from 'domain/objects/FractionObjectFactory';
 import { HintObjectFactory } from 'domain/exploration/HintObjectFactory';
-import { SubtitledHtmlObjectFactory } from
-  'domain/exploration/SubtitledHtmlObjectFactory';
-import { UnitsObjectFactory } from 'domain/objects/UnitsObjectFactory';
-import { UpgradedServices } from 'services/UpgradedServices';
+// import { SubtitledHtmlObjectFactory } from
+//   'domain/exploration/SubtitledHtmlObjectFactory';
+// import { UnitsObjectFactory } from 'domain/objects/UnitsObjectFactory';
+// import { UpgradedServices } from 'services/UpgradedServices';
 // ^^^ This block is to be removed.
+import { HintsAndSolutionManagerService } from 'pages/exploration-player-page/services/hints-and-solution-manager.service.ts';
+import { TestBed, flushMicrotasks, fakeAsync } from '@angular/core/testing';
+import { SolutionObjectFactory } from 'domain/exploration/SolutionObjectFactory';
+import { PlayerPositionService } from './player-position.service';
 
-require('domain/exploration/HintObjectFactory.ts');
-require('domain/exploration/SolutionObjectFactory.ts');
-require(
-  'pages/exploration-player-page/services/' +
-  'hints-and-solution-manager.service.ts');
-
-describe('HintsAndSolutionManager service', function() {
-  var $timeout;
+fdescribe('HintsAndSolutionManager service', () => {
+  // var $timeout;
   var hasms;
   var hof;
   var sof;
@@ -45,32 +43,14 @@ describe('HintsAndSolutionManager service', function() {
 
   var mockNewCardAvailableEmitter = new EventEmitter();
 
-  beforeEach(angular.mock.module('oppia'));
-  beforeEach(angular.mock.module('oppia', function($provide) {
-    $provide.value('FractionObjectFactory', new FractionObjectFactory());
-    $provide.value(
-      'HintObjectFactory', new HintObjectFactory(
-        new SubtitledHtmlObjectFactory()));
-    $provide.value(
-      'SubtitledHtmlObjectFactory', new SubtitledHtmlObjectFactory());
-    $provide.value('UnitsObjectFactory', new UnitsObjectFactory());
-  }));
-  beforeEach(angular.mock.module('oppia', function($provide) {
-    var ugs = new UpgradedServices();
-    for (let [key, value] of Object.entries(ugs.getUpgradedServices())) {
-      $provide.value(key, value);
-    }
-  }));
-
-  beforeEach(angular.mock.inject(function($injector) {
-    $timeout = $injector.get('$timeout');
-    pps = $injector.get('PlayerPositionService');
+  beforeEach(() => {
+    // $timeout = $injector.get('$timeout');
+    pps = TestBed.get(PlayerPositionService);
     spyOnProperty(pps, 'onNewCardAvailable').and.returnValue(
       mockNewCardAvailableEmitter);
-    hasms = $injector.get('HintsAndSolutionManagerService');
-    hof = $injector.get('HintObjectFactory');
-    sof = $injector.get('SolutionObjectFactory');
-
+    hasms = TestBed.get(HintsAndSolutionManagerService);
+    hof = TestBed.get(HintObjectFactory);
+    sof = TestBed.get(SolutionObjectFactory);
 
     firstHint = hof.createFromBackendDict({
       hint_content: {
@@ -101,20 +81,15 @@ describe('HintsAndSolutionManager service', function() {
 
     // Initialize the service with two hints and a solution.
     hasms.reset([firstHint, secondHint], solution);
-  }));
+  });
 
-  it('should display hints at the right times', function() {
+  fit('should display hints at the right times', fakeAsync(() => {
     expect(hasms.isHintTooltipOpen()).toBe(false);
     expect(hasms.isHintViewable(0)).toBe(false);
     expect(hasms.isHintViewable(1)).toBe(false);
     expect(hasms.isSolutionViewable()).toBe(false);
     expect(hasms.isHintConsumed(0)).toBe(false);
     expect(hasms.isHintConsumed(1)).toBe(false);
-
-    // For releaseHint.
-    $timeout.flush();
-    // For showTooltip (called only in the first call of releaseHint).
-    $timeout.flush();
 
     expect(hasms.isHintTooltipOpen()).toBe(true);
     expect(hasms.isHintViewable(0)).toBe(true);
@@ -124,7 +99,6 @@ describe('HintsAndSolutionManager service', function() {
     expect(hasms.isHintConsumed(0)).toBe(true);
     expect(hasms.isHintConsumed(1)).toBe(false);
 
-    $timeout.flush();
 
     // Function displayHint hides tooltip.
     expect(hasms.isHintTooltipOpen()).toBe(false);
@@ -137,22 +111,20 @@ describe('HintsAndSolutionManager service', function() {
     expect(hasms.isHintConsumed(0)).toBe(true);
     expect(hasms.isHintConsumed(1)).toBe(true);
 
-    $timeout.flush();
-
     expect(hasms.isSolutionViewable()).toBe(true);
 
-    $timeout.verifyNoPendingTasks();
-  });
+    flushMicrotasks();
+  }));
 
   it('should not continue to display hints after after a correct answer is' +
-     'submitted', function() {
+     'submitted', fakeAsync(() => {
     expect(hasms.isHintViewable(0)).toBe(false);
     expect(hasms.isHintViewable(1)).toBe(false);
     expect(hasms.isSolutionViewable()).toBe(false);
     expect(hasms.isHintConsumed(0)).toBe(false);
     expect(hasms.isHintConsumed(1)).toBe(false);
 
-    $timeout.flush();
+    flushMicrotasks();
 
     expect(hasms.isHintViewable(0)).toBe(true);
     expect(hasms.isHintViewable(1)).toBe(false);
@@ -162,7 +134,7 @@ describe('HintsAndSolutionManager service', function() {
     expect(hasms.isHintConsumed(1)).toBe(false);
 
     mockNewCardAvailableEmitter.emit();
-    $timeout.flush();
+    flushMicrotasks();
 
     expect(hasms.isHintViewable(0)).toBe(true);
     expect(hasms.isHintViewable(1)).toBe(false);
@@ -172,25 +144,25 @@ describe('HintsAndSolutionManager service', function() {
     expect(hasms.isHintConsumed(1)).toBe(false);
     expect(hasms.isSolutionViewable()).toBe(false);
 
-    $timeout.verifyNoPendingTasks();
-  });
+    flushMicrotasks();
+  }));
 
-  it('should show the correct number of hints', function() {
+  it('should show the correct number of hints', () => {
     expect(hasms.getNumHints()).toBe(2);
   });
 
-  it('should correctly retrieve the solution', function() {
-    $timeout.flush();
+  it('should correctly retrieve the solution', fakeAsync(() => {
+    flushMicrotasks();
 
     expect(hasms.isSolutionConsumed()).toBe(false);
     expect(hasms.displaySolution().correctAnswer).toBe(
       'This is a correct answer!');
     expect(hasms.isSolutionConsumed()).toBe(true);
 
-    $timeout.verifyNoPendingTasks();
-  });
+    // $timeout.verifyNoPendingTasks();
+  }));
 
-  it('should reset the service', function() {
+  it('should reset the service', fakeAsync(() => {
     hasms.reset([firstHint, secondHint, thirdHint], solution);
     expect(hasms.getNumHints()).toBe(3);
 
@@ -199,7 +171,7 @@ describe('HintsAndSolutionManager service', function() {
     expect(hasms.isHintViewable(2)).toBe(false);
     expect(hasms.isSolutionViewable()).toBe(false);
 
-    $timeout.flush();
+    flushMicrotasks();
 
     expect(hasms.isHintViewable(0)).toBe(true);
     expect(hasms.isHintViewable(1)).toBe(false);
@@ -207,7 +179,7 @@ describe('HintsAndSolutionManager service', function() {
     expect(hasms.isSolutionViewable()).toBe(false);
     expect(hasms.displayHint(0).getHtml()).toBe('one');
 
-    $timeout.flush();
+    flushMicrotasks();
 
     expect(hasms.isHintViewable(0)).toBe(true);
     expect(hasms.isHintViewable(1)).toBe(true);
@@ -216,7 +188,7 @@ describe('HintsAndSolutionManager service', function() {
     expect(hasms.displayHint(0).getHtml()).toBe('one');
     expect(hasms.displayHint(1).getHtml()).toBe('two');
 
-    $timeout.flush();
+    flushMicrotasks();
 
     expect(hasms.isHintViewable(0)).toBe(true);
     expect(hasms.isHintViewable(1)).toBe(true);
@@ -226,37 +198,39 @@ describe('HintsAndSolutionManager service', function() {
     expect(hasms.displayHint(1).getHtml()).toBe('two');
     expect(hasms.displayHint(2).getHtml()).toBe('three');
 
-    $timeout.flush();
+    flushMicrotasks();
 
     expect(hasms.isSolutionViewable()).toBe(true);
-  });
+  }));
 
-  it('should reset the service when timeouts was called before', function() {
-    // Set timeout.
-    $timeout.flush();
-    // Set tooltipTimeout.
-    $timeout.flush();
+  it('should reset the service when timeouts was called before',
+    fakeAsync(() => {
+      // Set timeout.
+      flushMicrotasks();
+      // Set tooltipTimeout.
+      flushMicrotasks();
 
-    // Reset service to 0 solutions so releaseHint timeout won't be called.
-    hasms.reset([], solution);
+      // Reset service to 0 solutions so releaseHint timeout won't be called.
+      hasms.reset([], solution);
 
-    // There is no timeout to flush. timeout and tooltipTimeout variables
-    // were cleaned.
-    expect(function() {
-      $timeout.flush();
-    }).toThrowError('No deferred tasks to be flushed');
-    $timeout.verifyNoPendingTasks();
-  });
+      // There is no timeout to flush. timeout and tooltipTimeout variables
+      // were cleaned.
+      expect(() => {
+        flushMicrotasks();
+      }).toThrowError('No deferred tasks to be flushed');
+      // $timeout.verifyNoPendingTasks();
+    })
+  );
 
   it('should not record the wrong answer when a hint is already released',
-    function() {
+    fakeAsync(() => {
       expect(hasms.isHintTooltipOpen()).toBe(false);
       expect(hasms.isHintViewable(0)).toBe(false);
       expect(hasms.isHintViewable(1)).toBe(false);
       expect(hasms.isSolutionViewable()).toBe(false);
 
-      $timeout.flush();
-      $timeout.flush();
+      flushMicrotasks();
+      flushMicrotasks();
 
       expect(hasms.isHintTooltipOpen()).toBe(true);
       // It only changes hint visibility.
@@ -266,15 +240,15 @@ describe('HintsAndSolutionManager service', function() {
       expect(hasms.isSolutionViewable()).toBe(false);
 
       hasms.recordWrongAnswer();
-      $timeout.verifyNoPendingTasks();
+      // $timeout.verifyNoPendingTasks();
 
       expect(hasms.isHintTooltipOpen()).toBe(true);
       expect(hasms.isHintViewable(0)).toBe(true);
       expect(hasms.isHintViewable(1)).toBe(false);
       expect(hasms.isSolutionViewable()).toBe(false);
-    });
+    }));
 
-  it('should record the wrong answer twice', function() {
+  it('should record the wrong answer twice', fakeAsync(() => {
     expect(hasms.isHintTooltipOpen()).toBe(false);
     expect(hasms.isHintViewable(0)).toBe(false);
     expect(hasms.isHintViewable(1)).toBe(false);
@@ -282,24 +256,25 @@ describe('HintsAndSolutionManager service', function() {
 
     hasms.recordWrongAnswer();
     hasms.recordWrongAnswer();
-    $timeout.flush(10000);
-    $timeout.flush(60000);
+    flushMicrotasks();
+    flushMicrotasks();
     expect(hasms.isHintTooltipOpen()).toBe(true);
 
     hasms.displayHint(0);
 
     hasms.recordWrongAnswer();
-    $timeout.flush(10000);
+    flushMicrotasks();
 
-    $timeout.flush(60000);
+
+    flushMicrotasks();
 
     expect(hasms.isHintTooltipOpen()).toBe(false);
     expect(hasms.isHintViewable(0)).toBe(true);
     expect(hasms.isHintViewable(1)).toBe(true);
     expect(hasms.isSolutionViewable()).toBe(false);
 
-    $timeout.verifyNoPendingTasks();
-  });
+    // $timeout.verifyNoPendingTasks();
+  }));
 
   it('should send the solution viewed event emitter', () => {
     let mockSolutionViewedEventEmitter = new EventEmitter();
