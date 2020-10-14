@@ -16,233 +16,351 @@
  * @fileoverview Service to send changes to a topic to the backend.
  */
 
-require('domain/utilities/url-interpolation.service.ts');
 
-require('domain/topic/topic-domain.constants.ajs.ts');
+import { UrlInterpolationService } from 'domain/utilities/url-interpolation.service';
+import { TopicDomainConstants } from 'domain/topic/topic-domain.constants';
+import { AppConstants } from 'core/templates/app.constants';
+import { HttpClient } from '@angular/common/http';
+import { Injectable } from '@angular/core';
+import { BackendChangeObject } from 'domain/editor/undo_redo/change.model';
+import { SubtitledHtmlBackendDict } from 'domain/exploration/SubtitledHtmlObjectFactory';
+import { RecordedVoiceOverBackendDict } from 'domain/exploration/RecordedVoiceoversObjectFactory';
+import { WrittenTranslationsBackendDict } from 'domain/exploration/WrittenTranslationsObjectFactory';
 
-angular.module('oppia').factory('EditableTopicBackendApiService', [
-  '$http', '$q', 'UrlInterpolationService',
-  'EDITABLE_TOPIC_DATA_URL_TEMPLATE', 'SUBTOPIC_PAGE_EDITOR_DATA_URL_TEMPLATE',
-  'TOPIC_EDITOR_STORY_URL_TEMPLATE', 'TOPIC_NAME_HANDLER_URL_TEMPLATE',
-  'TOPIC_URL_FRAGMENT_HANDLER_URL_TEMPLATE',
-  function(
-      $http, $q, UrlInterpolationService,
-      EDITABLE_TOPIC_DATA_URL_TEMPLATE, SUBTOPIC_PAGE_EDITOR_DATA_URL_TEMPLATE,
-      TOPIC_EDITOR_STORY_URL_TEMPLATE, TOPIC_NAME_HANDLER_URL_TEMPLATE,
-      TOPIC_URL_FRAGMENT_HANDLER_URL_TEMPLATE) {
-    var _fetchTopic = function(
-        topicId, successCallback, errorCallback) {
-      var topicDataUrl = UrlInterpolationService.interpolateUrl(
-        EDITABLE_TOPIC_DATA_URL_TEMPLATE, {
-          topic_id: topicId
-        });
+export interface TopicDataDict {
+  'topic_dict': {},
+  'grouped_skill_summary_dicts': {},
+  'skill_id_to_description_dict': SkillIdToDescription,
+  'skill_question_count_dict': {},
+  'skill_id_to_rubrics_dict': SkillIdToRubrics
+  'classroom_url_fragment': {}
+}
 
-      $http.get(topicDataUrl).then(function(response) {
-        if (successCallback) {
-          // The response is passed as a dict with 2 fields and not as 2
-          // parameters, because the successCallback is called as the resolve
-          // callback function in $q in fetchTopic(), and according to its
-          // documentation (https://docs.angularjs.org/api/ng/service/$q),
-          // resolve or reject can have only a single parameter.
-          successCallback({
-            topicDict: angular.copy(response.data.topic_dict),
-            groupedSkillSummaries: angular.copy(
-              response.data.grouped_skill_summary_dicts),
-            skillIdToDescriptionDict: angular.copy(
-              response.data.skill_id_to_description_dict),
-            skillQuestionCountDict: {
-              ...response.data.skill_question_count_dict
-            },
-            skillIdToRubricsDict: angular.copy(
-              response.data.skill_id_to_rubrics_dict),
-            classroomUrlFragment: response.data.classroom_url_fragment,
-          });
-        }
-      }, function(errorResponse) {
-        if (errorCallback) {
-          errorCallback(errorResponse.data);
-        }
-      });
-    };
+export interface StoryDataDict{
+  'canonical_story_summary_dicts':{}
+}
 
-    var _fetchStories = function(
-        topicId, successCallback, errorCallback) {
-      var storiesDataUrl = UrlInterpolationService.interpolateUrl(
-        TOPIC_EDITOR_STORY_URL_TEMPLATE, {
-          topic_id: topicId
-        });
-
-      $http.get(storiesDataUrl).then(function(response) {
-        var canonicalStorySummaries = angular.copy(
-          response.data.canonical_story_summary_dicts);
-        if (successCallback) {
-          successCallback(canonicalStorySummaries);
-        }
-      }, function(errorResponse) {
-        if (errorCallback) {
-          errorCallback(errorResponse.data);
-        }
-      });
-    };
-
-    var _fetchSubtopicPage = function(
-        topicId, subtopicId, successCallback, errorCallback) {
-      var subtopicPageDataUrl = UrlInterpolationService.interpolateUrl(
-        SUBTOPIC_PAGE_EDITOR_DATA_URL_TEMPLATE, {
-          topic_id: topicId,
-          subtopic_id: subtopicId.toString()
-        });
-
-      $http.get(subtopicPageDataUrl).then(function(response) {
-        var topic = angular.copy(response.data.subtopic_page);
-        if (successCallback) {
-          successCallback(topic);
-        }
-      }, function(errorResponse) {
-        if (errorCallback) {
-          errorCallback(errorResponse.data);
-        }
-      });
-    };
-
-    var _deleteTopic = function(
-        topicId, successCallback, errorCallback) {
-      var topicDataUrl = UrlInterpolationService.interpolateUrl(
-        EDITABLE_TOPIC_DATA_URL_TEMPLATE, {
-          topic_id: topicId
-        });
-      $http['delete'](topicDataUrl).then(function(response) {
-        if (successCallback) {
-          successCallback(response.status);
-        }
-      }, function(errorResponse) {
-        if (errorCallback) {
-          errorCallback(errorResponse.data);
-        }
-      });
-    };
-
-    var _updateTopic = function(
-        topicId, topicVersion, commitMessage, changeList,
-        successCallback, errorCallback) {
-      var editableTopicDataUrl = UrlInterpolationService.interpolateUrl(
-        EDITABLE_TOPIC_DATA_URL_TEMPLATE, {
-          topic_id: topicId
-        });
-
-      var putData = {
-        version: topicVersion,
-        commit_message: commitMessage,
-        topic_and_subtopic_page_change_dicts: changeList
-      };
-      $http.put(editableTopicDataUrl, putData).then(function(response) {
-        if (successCallback) {
-          // Here also, a dict with 2 fields are passed instead of just 2
-          // parameters, due to the same reason as written for _fetchTopic().
-          successCallback({
-            topicDict: angular.copy(response.data.topic_dict),
-            skillIdToDescriptionDict: angular.copy(
-              response.data.skill_id_to_description_dict),
-            skillIdToRubricsDict: angular.copy(
-              response.data.skill_id_to_rubrics_dict)
-          });
-        }
-      }, function(errorResponse) {
-        if (errorCallback) {
-          errorCallback(errorResponse.data);
-        }
-      });
-    };
-
-    var _doesTopicWithUrlFragmentExist = function(
-        topicUrlFragment, successCallback, errorCallback) {
-      var topicUrlFragmentUrl = UrlInterpolationService.interpolateUrl(
-        TOPIC_URL_FRAGMENT_HANDLER_URL_TEMPLATE, {
-          topic_url_fragment: topicUrlFragment
-        });
-      $http.get(topicUrlFragmentUrl).then(function(response) {
-        if (successCallback) {
-          successCallback(response.data.topic_url_fragment_exists);
-        }
-      }, function(errorResponse) {
-        if (errorCallback) {
-          errorCallback(errorResponse.data);
-        }
-      });
-    };
-
-    var _doesTopicWithNameExist = function(
-        topicName, successCallback, errorCallback) {
-      var topicNameUrl = UrlInterpolationService.interpolateUrl(
-        TOPIC_NAME_HANDLER_URL_TEMPLATE, {
-          topic_name: topicName
-        });
-      $http.get(topicNameUrl).then(function(response) {
-        if (successCallback) {
-          successCallback(response.data.topic_name_exists);
-        }
-      }, function(errorResponse) {
-        if (errorCallback) {
-          errorCallback(errorResponse.data);
-        }
-      });
-    };
-
-    return {
-      fetchTopic: function(topicId) {
-        return $q(function(resolve, reject) {
-          _fetchTopic(topicId, resolve, reject);
-        });
-      },
-
-      fetchStories: function(topicId) {
-        return $q(function(resolve, reject) {
-          _fetchStories(topicId, resolve, reject);
-        });
-      },
-
-      fetchSubtopicPage: function(topicId, subtopicId) {
-        return $q(function(resolve, reject) {
-          _fetchSubtopicPage(topicId, subtopicId, resolve, reject);
-        });
-      },
-
-      /**
-       * Updates a topic in the backend with the provided topic ID.
-       * The changes only apply to the topic of the given version and the
-       * request to update the topic will fail if the provided topic
-       * version is older than the current version stored in the backend. Both
-       * the changes and the message to associate with those changes are used
-       * to commit a change to the topic. The new topic is passed to
-       * the success callback, if one is provided to the returned promise
-       * object. Errors are passed to the error callback, if one is provided.
-       */
-      updateTopic: function(
-          topicId, topicVersion, commitMessage, changeList) {
-        return $q(function(resolve, reject) {
-          _updateTopic(
-            topicId, topicVersion, commitMessage, changeList,
-            resolve, reject);
-        });
-      },
-
-      deleteTopic: function(topicId) {
-        return $q(function(resolve, reject) {
-          _deleteTopic(topicId, resolve, reject);
-        });
-      },
-
-      doesTopicWithNameExistAsync: async function(topicName) {
-        return $q(function(resolve, reject) {
-          _doesTopicWithNameExist(topicName, resolve, reject);
-        });
-      },
-
-      doesTopicWithUrlFragmentExistAsync: async function(topicUrlFragment) {
-        return $q(function(resolve, reject) {
-          _doesTopicWithUrlFragmentExist(topicUrlFragment, resolve, reject);
-        });
-      }
-    };
+export interface SubtopicPageDict{
+  'subtopic_page': {
+    'id': string,
+    'topic_id': string,
+    'page_contents': {
+      'subtitled_html': SubtitledHtmlBackendDict,
+      'recorded_voiceovers': RecordedVoiceOverBackendDict,
+      'written_translations': WrittenTranslationsBackendDict
+    },
+    'page_contents_schema_version': number,
+    'language_code': string,
+    'version': number
   }
-]);
+}
+
+export interface SkillIdToDescription {
+  string: string
+}
+export interface SkillIdToRubrics {
+  string: string
+}
+
+export interface UpdateTopicDict{
+  'topic_dict': TopicDataDict,
+  'skill_id_to_description_dict': SkillIdToDescription,
+  'skill_id_to_rubrics_dict': SkillIdToRubrics
+}
+
+@Injectable({
+  providedIn: 'root',
+})
+export class EditableTopicBackendApiService {
+  constructor(
+    private urlInterpolationService: UrlInterpolationService,
+    private http: HttpClient
+  ) {}
+
+  private _fetchTopic(
+      topicId: string,
+      successCallback: Function,
+      errorCallback: Function
+  ) {
+    const topicDataUrl = this.urlInterpolationService.interpolateUrl(
+      AppConstants.EDITABLE_TOPIC_DATA_URL_TEMPLATE,
+      {
+        topic_id: topicId,
+      }
+    );
+    this.http
+      .get<TopicDataDict>(topicDataUrl)
+      .toPromise()
+      .then(
+        (response) => {
+          if (successCallback) {
+            successCallback({
+              topicDict: response.topic_dict,
+              groupedSkillSummaries: response.grouped_skill_summary_dicts,
+              skillIdToDescriptionDict: response.skill_id_to_description_dict,
+              skillQuestionCountDict: { ...response.skill_question_count_dict },
+              skillIdToRubricsDict: response.skill_id_to_rubrics_dict,
+              classroomUrlFragment: response.classroom_url_fragment,
+            });
+          }
+        },
+        (errorResponse) => {
+          if (errorCallback) {
+            errorCallback(errorResponse.error.error);
+          }
+        }
+      );
+  }
+
+  private _fetchStories(
+      topicId: string,
+      successCallback: Function,
+      errorCallback: Function
+  ) {
+    const storiesDataUrl = this.urlInterpolationService.interpolateUrl(
+      TopicDomainConstants.TOPIC_EDITOR_STORY_URL_TEMPLATE,
+      {
+        topic_id: topicId,
+      }
+    );
+
+    this.http
+      .get<StoryDataDict>(storiesDataUrl)
+      .toPromise()
+      .then(
+        (response) => {
+          const canonicalStorySummaries =
+            response.canonical_story_summary_dicts;
+          if (successCallback) {
+            successCallback(canonicalStorySummaries);
+          }
+        },
+        (errorResponse) => {
+          if (errorCallback) {
+            errorCallback(errorResponse.error.error);
+          }
+        }
+      );
+  }
+
+  private _fetchSubtopicPage(
+      topicId: string,
+      subtopicId: string,
+      successCallback: Function,
+      errorCallback: Function
+  ) {
+    const subtopicPageDataUrl = this.urlInterpolationService.interpolateUrl(
+      AppConstants.SUBTOPIC_PAGE_EDITOR_DATA_URL_TEMPLATE,
+      {
+        topic_id: topicId,
+        subtopic_id: subtopicId.toString(),
+      }
+    );
+
+    this.http
+      .get<SubtopicPageDict>(subtopicPageDataUrl)
+      .toPromise()
+      .then(
+        (response) => {
+          const topic = response.subtopic_page;
+          if (successCallback) {
+            successCallback(topic);
+          }
+        },
+        (errorResponse) => {
+          if (errorCallback) {
+            errorCallback(errorResponse.error.error);
+          }
+        }
+      );
+  }
+
+  private _deleteTopic(
+      topicId: string,
+      successCallback: Function,
+      errorCallback: Function
+  ) {
+    const topicDataUrl = this.urlInterpolationService.interpolateUrl(
+      AppConstants.EDITABLE_TOPIC_DATA_URL_TEMPLATE,
+      {
+        topic_id: topicId,
+      }
+    );
+
+    this.http['delete'](topicDataUrl)
+      .toPromise()
+      .then(
+        (response: {status: number}) => {
+          if (successCallback) {
+            successCallback(response.status);
+          }
+        },
+        (errorResponse) => {
+          if (errorCallback) {
+            errorCallback(errorResponse.error.error);
+          }
+        }
+      );
+  }
+
+  private _updateTopic(
+      topicId: string,
+      topicVersion: number,
+      commitMessage: string,
+      changeList: BackendChangeObject[],
+      successCallback: Function,
+      errorCallback: Function
+  ) {
+    const editableTopicDataUrl = this.urlInterpolationService.interpolateUrl(
+      AppConstants.EDITABLE_TOPIC_DATA_URL_TEMPLATE,
+      {
+        topic_id: topicId,
+      }
+    );
+    const putData = {
+      version: topicVersion,
+      commit_message: commitMessage,
+      topic_and_subtopic_page_change_dicts: changeList,
+    };
+
+    this.http
+      .put<UpdateTopicDict>(editableTopicDataUrl, putData)
+      .toPromise()
+      .then(
+        (response) => {
+          if (successCallback) {
+            successCallback({
+              topicDict: response.topic_dict,
+              skillIdToDescriptionDict: response.skill_id_to_description_dict,
+              skillIdToRubricsDict: response.skill_id_to_rubrics_dict,
+            });
+          }
+        },
+        (errorResponse) => {
+          if (errorCallback) {
+            errorCallback(errorResponse.error.error);
+          }
+        }
+      );
+  }
+
+  private _doesTopicWithUrlFragmentExist(
+      topicUrlFragment: string,
+      successCallback: Function,
+      errorCallback: Function
+  ) {
+    const topicUrlFragmentUrl = this.urlInterpolationService.interpolateUrl(
+      TopicDomainConstants.TOPIC_URL_FRAGMENT_HANDLER_URL_TEMPLATE,
+      {
+        topic_url_fragment: topicUrlFragment,
+      }
+    );
+    this.http
+      .get<{'topic_url_fragment_exists': boolean}>(topicUrlFragmentUrl)
+      .toPromise()
+      .then(
+        (response) => {
+          if (successCallback) {
+            successCallback(response.topic_url_fragment_exists);
+          }
+        },
+        (errorResponse) => {
+          if (errorCallback) {
+            errorCallback(errorResponse.error.error);
+          }
+        }
+      );
+  }
+
+  private _doesTopicWithNameExist(
+      topicName: string,
+      successCallback: Function,
+      errorCallback: Function
+  ) {
+    const topicNameUrl = this.urlInterpolationService.interpolateUrl(
+      TopicDomainConstants.TOPIC_NAME_HANDLER_URL_TEMPLATE,
+      {
+        topic_name: topicName,
+      }
+    );
+    this.http
+      .get< {'topic_name_exists': boolean}>(topicNameUrl)
+      .toPromise()
+      .then(
+        (response) => {
+          if (successCallback) {
+            successCallback(response.topic_name_exists);
+          }
+        },
+        (errorResponse) => {
+          if (errorCallback) {
+            errorCallback(errorResponse.error.error);
+          }
+        }
+      );
+  }
+
+  fetchTopic(topicId: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this._fetchTopic(topicId, resolve, reject);
+    });
+  }
+
+  fetchStories(topicId: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this._fetchStories(topicId, resolve, reject);
+    });
+  }
+
+  fetchSubtopicPage(topicId: string, subtopicId: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this._fetchSubtopicPage(topicId, subtopicId, resolve, reject);
+    });
+  }
+
+  /**
+   * Updates a topic in the backend with the provided topic ID.
+   * The changes only apply to the topic of the given version and the
+   * request to update the topic will fail if the provided topic
+   * version is older than the current version stored in the backend. Both
+   * the changes and the message to associate with those changes are used
+   * to commit a change to the topic. The new topic is passed to
+   * the success callback, if one is provided to the returned promise
+   * object. Errors are passed to the error callback, if one is provided.
+   */
+  updateTopic(
+      topicId: string,
+      topicVersion: number,
+      commitMessage: string,
+      changeList: BackendChangeObject[]
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this._updateTopic(
+        topicId,
+        topicVersion,
+        commitMessage,
+        changeList,
+        resolve,
+        reject
+      );
+    });
+  }
+
+  deleteTopic(topicId: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this._deleteTopic(topicId, resolve, reject);
+    });
+  }
+
+  doesTopicWithNameExistAsync(topicName: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this._doesTopicWithNameExist(topicName, resolve, reject);
+    });
+  }
+
+  doesTopicWithUrlFragmentExistAsync(topicUrlFragment: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this._doesTopicWithUrlFragmentExist(topicUrlFragment, resolve, reject);
+    });
+  }
+}
