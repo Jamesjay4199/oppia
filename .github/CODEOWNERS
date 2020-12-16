@@ -589,7 +589,7 @@
 /core/templates/services/services.constants.ajs.ts @vojtechjelinek
 /core/templates/services/services.constants.ts @vojtechjelinek
 
-
+# Something else.
 # Dynamic Feature Gating project
 /core/controllers/platform_feature*.py @BenHenning @vinitamurthi
 /core/domain/platform_feature_services*.py @BenHenning @vinitamurthi
