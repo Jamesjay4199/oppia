@@ -15,13 +15,16 @@
 /**
  * @fileoverview Unit tests for TranslationModalController.
  */
+import { importAllAngularServices } from 'tests/unit-test-utils';
 
 describe('Translation Modal Controller', function() {
   let $httpBackend = null;
   let $q = null;
   let $scope = null;
   let $uibModalInstance = null;
+  let CkEditorCopyContentService = null;
   let CsrfTokenService = null;
+  let SiteAnalyticsService = null;
   let TranslateTextService = null;
   let TranslationLanguageService = null;
 
@@ -32,14 +35,18 @@ describe('Translation Modal Controller', function() {
   };
   let getTextToTranslateSpy = null;
 
+  importAllAngularServices();
+
   beforeEach(angular.mock.module('oppia'));
   beforeEach(angular.mock.inject(function($injector, $controller) {
     $httpBackend = $injector.get('$httpBackend');
     $q = $injector.get('$q');
     const $rootScope = $injector.get('$rootScope');
     CsrfTokenService = $injector.get('CsrfTokenService');
+    SiteAnalyticsService = $injector.get('SiteAnalyticsService');
     TranslateTextService = $injector.get('TranslateTextService');
     TranslationLanguageService = $injector.get('TranslationLanguageService');
+    CkEditorCopyContentService = $injector.get('CkEditorCopyContentService');
 
     $uibModalInstance = jasmine.createSpyObj(
       '$uibModalInstance', ['close', 'dismiss']);
@@ -51,6 +58,9 @@ describe('Translation Modal Controller', function() {
       .returnValue('English');
     spyOn(TranslationLanguageService, 'getActiveLanguageCode').and
       .returnValue('en');
+
+    spyOn(CkEditorCopyContentService, 'copyModeActive').and.returnValue(true);
+
     getTextToTranslateSpy = spyOn(TranslateTextService, 'getTextToTranslate');
     getTextToTranslateSpy.and.returnValue({
       text: 'Texto a traducir',
@@ -95,6 +105,19 @@ describe('Translation Modal Controller', function() {
       expect($scope.loadingData).toBe(false);
     });
 
+  it('should register Contributor Dashboard submit suggestion event when' +
+    ' suggesting translated text',
+  function() {
+    $httpBackend.flush();
+    spyOn(
+      SiteAnalyticsService,
+      'registerContributorDashboardSubmitSuggestionEvent');
+    $scope.suggestTranslatedText();
+    expect(
+      SiteAnalyticsService.registerContributorDashboardSubmitSuggestionEvent)
+      .toHaveBeenCalledWith('Translation');
+  });
+
   it('should suggest more text to be translated when contributor finish' +
     ' translating text and they would like to continue translating',
   function() {
@@ -120,6 +143,22 @@ describe('Translation Modal Controller', function() {
     });
     expect($scope.uploadingTranslation).toBe(false);
   });
+
+  it('should broadcast copy to ck editor when clicking on content',
+    function() {
+      spyOn(CkEditorCopyContentService, 'broadcastCopy').and
+        .callFake(() => {});
+
+      var mockEvent = {
+        stopPropagation: jasmine.createSpy('stopPropagation', () => {}),
+        target: {}
+      };
+      $scope.onContentClick(mockEvent);
+
+      expect(mockEvent.stopPropagation).toHaveBeenCalled();
+      expect(CkEditorCopyContentService.broadcastCopy).toHaveBeenCalledWith(
+        mockEvent.target);
+    });
 
   it('should close modal when there is not more text to be translated',
     function() {

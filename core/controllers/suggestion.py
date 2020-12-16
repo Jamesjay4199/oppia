@@ -48,10 +48,13 @@ def _get_target_id_to_exploration_opportunity_dict(suggestions):
         summary dict.
     """
     target_ids = set([s.target_id for s in suggestions])
-    opportunities = (
-        opportunity_services.get_exploration_opportunity_summaries_by_ids(
-            list(target_ids)))
-    return {opp.id: opp.to_dict() for opp in opportunities}
+    opportunity_id_to_opportunity_dict = {
+        opp_id: (opp.to_dict() if opp is not None else None)
+        for opp_id, opp in (
+            opportunity_services.get_exploration_opportunity_summaries_by_ids(
+                list(target_ids)).items())
+    }
+    return opportunity_id_to_opportunity_dict
 
 
 def _get_target_id_to_skill_opportunity_dict(suggestions):
@@ -65,22 +68,25 @@ def _get_target_id_to_skill_opportunity_dict(suggestions):
         dict. Dict mapping target_id to corresponding skill opportunity dict.
     """
     target_ids = set([s.target_id for s in suggestions])
-    opportunities = (
-        opportunity_services.get_skill_opportunities_by_ids(list(target_ids)))
-    opportunity_skill_ids = [opp.id for opp in opportunities]
+    opportunity_id_to_opportunity_dict = {
+        opp_id: (opp.to_dict() if opp is not None else None)
+        for opp_id, opp in opportunity_services.get_skill_opportunities_by_ids(
+            list(target_ids)).items()
+    }
     opportunity_id_to_skill = {
         skill.id: skill
-        for skill in skill_fetchers.get_multi_skills(opportunity_skill_ids)
+        for skill in skill_fetchers.get_multi_skills([
+            opp['id']
+            for opp in opportunity_id_to_opportunity_dict.values()
+            if opp is not None])
     }
-    opportunity_id_to_opportunity = {}
-    for opp in opportunities:
-        opp_dict = opp.to_dict()
-        skill = opportunity_id_to_skill.get(opp.id)
+
+    for opp_id, skill in opportunity_id_to_skill.items():
         if skill is not None:
-            opp_dict['skill_rubrics'] = [
+            opportunity_id_to_opportunity_dict[opp_id]['skill_rubrics'] = [
                 rubric.to_dict() for rubric in skill.rubrics]
-        opportunity_id_to_opportunity[opp.id] = opp_dict
-    return opportunity_id_to_opportunity
+
+    return opportunity_id_to_opportunity_dict
 
 
 class SuggestionHandler(base.BaseHandler):
@@ -100,17 +106,16 @@ class SuggestionHandler(base.BaseHandler):
 
         # TODO(#10513) : Find a way to save the images before the suggestion is
         # created.
-        html_list = suggestion.get_all_html_content_strings()
-        filenames = (
-            html_cleaner.get_image_filenames_from_html_strings(html_list))
-        if suggestion.suggestion_type == (
-                suggestion_models.SUGGESTION_TYPE_EDIT_STATE_CONTENT):
-            filenames = []
-        suggestion_image_context = (
-            fs_services.get_image_context_for_suggestion_target(
-                suggestion.target_type))
+        suggestion_image_context = suggestion.image_context
+        # For suggestion which doesn't need images for rendering the
+        # image_context is set to None.
+        if suggestion_image_context is None:
+            self.render_json(self.values)
+            return
 
-        for filename in filenames:
+        new_image_filenames = (
+            suggestion.get_new_image_filenames_added_in_suggestion())
+        for filename in new_image_filenames:
             image = self.request.get(filename)
             if not image:
                 logging.error(
@@ -131,6 +136,16 @@ class SuggestionHandler(base.BaseHandler):
             fs_services.save_original_and_compressed_versions_of_image(
                 filename, suggestion_image_context, suggestion.target_id,
                 image, 'image', image_is_compressible)
+
+        target_entity_html_list = suggestion.get_target_entity_html_strings()
+        target_image_filenames = (
+            html_cleaner.get_image_filenames_from_html_strings(
+                target_entity_html_list))
+
+        fs_services.copy_images(
+            suggestion.target_type, suggestion.target_id,
+            suggestion_image_context, suggestion.target_id,
+            target_image_filenames)
 
         self.render_json(self.values)
 

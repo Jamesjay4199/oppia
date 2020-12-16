@@ -26,14 +26,13 @@ require('components/summary-tile/collection-summary-tile.directive.ts');
 require('pages/library-page/search-results/search-results.component.ts');
 
 require('domain/classroom/classroom-backend-api.service');
-require('domain/learner_dashboard/LearnerDashboardActivityIdsObjectFactory.ts');
+require('domain/learner_dashboard/learner-dashboard-activity-ids.model.ts');
 require(
   'domain/learner_dashboard/learner-dashboard-ids-backend-api.service.ts');
 require('domain/learner_dashboard/learner-playlist.service.ts');
 require('domain/utilities/url-interpolation.service.ts');
 require('services/alerts.service.ts');
 require('services/keyboard-shortcut.service.ts');
-require('services/page-title.service.ts');
 require('services/search.service.ts');
 require('services/user.service.ts');
 require('services/contextual/url.service.ts');
@@ -45,21 +44,23 @@ require('pages/library-page/library-page.constants.ajs.ts');
 angular.module('oppia').component('libraryPage', {
   template: require('./library-page.component.html'),
   controller: [
-    '$http', '$log', '$scope', '$timeout', '$window',
+    '$http', '$log', '$rootScope', '$scope', '$timeout', '$window',
     'I18nLanguageCodeService', 'KeyboardShortcutService', 'LoaderService',
-    'PageTitleService', 'SearchService', 'UrlInterpolationService',
+    'SearchService', 'UrlInterpolationService',
     'UserService', 'WindowDimensionsService', 'LIBRARY_PAGE_MODES',
     'LIBRARY_PATHS_TO_MODES', 'LIBRARY_TILE_WIDTH_PX',
     function(
-        $http, $log, $scope, $timeout, $window,
+        $http, $log, $rootScope, $scope, $timeout, $window,
         I18nLanguageCodeService, KeyboardShortcutService, LoaderService,
-        PageTitleService, SearchService, UrlInterpolationService,
+        SearchService, UrlInterpolationService,
         UserService, WindowDimensionsService, LIBRARY_PAGE_MODES,
         LIBRARY_PATHS_TO_MODES, LIBRARY_TILE_WIDTH_PX) {
       var ctrl = this;
 
       ctrl.classroomBackendApiService = (
         OppiaAngularRootComponent.classroomBackendApiService);
+      ctrl.pageTitleService = (
+        OppiaAngularRootComponent.pageTitleService);
 
       var possibleBannerFilenames = [
         'banner1.svg', 'banner2.svg', 'banner3.svg', 'banner4.svg'];
@@ -226,7 +227,7 @@ angular.module('oppia').component('libraryPage', {
             ctrl.pageMode === LIBRARY_PAGE_MODES.SEARCH) {
           title = 'Find explorations to learn from - Oppia';
         }
-        PageTitleService.setPageTitle(title);
+        ctrl.pageTitleService.setPageTitle(title);
 
         // Keeps track of the index of the left-most visible card of each
         // group.
@@ -306,6 +307,9 @@ angular.module('oppia').component('libraryPage', {
               } else {
                 LoaderService.hideLoadingScreen();
               }
+              // TODO(#8521): Remove the use of $rootScope.$apply()
+              // once the controller is migrated to angular.
+              $rootScope.$applyAsync();
             });
 
             I18nLanguageCodeService.onPreferredLanguageCodesLoaded.emit(

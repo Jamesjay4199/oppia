@@ -17,7 +17,6 @@
 from __future__ import absolute_import  # pylint: disable=import-only-modules
 from __future__ import unicode_literals  # pylint: disable=import-only-modules
 
-import datetime
 import random
 import types
 
@@ -33,25 +32,21 @@ import utils
     [models.NAMES.base_model, models.NAMES.question])
 
 
+class QuestionSnapshotContentModelTests(test_utils.GenericTestBase):
+
+    def test_get_deletion_policy_is_not_applicable(self):
+        self.assertEqual(
+            question_models.QuestionSnapshotContentModel.get_deletion_policy(),
+            base_models.DELETION_POLICY.NOT_APPLICABLE)
+
+
 class QuestionModelUnitTests(test_utils.GenericTestBase):
     """Tests the QuestionModel class."""
 
     def test_get_deletion_policy(self):
         self.assertEqual(
             question_models.QuestionModel.get_deletion_policy(),
-            base_models.DELETION_POLICY.LOCALLY_PSEUDONYMIZE)
-
-    def test_has_reference_to_user_id(self):
-        question_state_data = self._create_valid_question_data('ABC')
-        linked_skill_ids = ['skill_id1', 'skill_id2']
-        self.save_new_question(
-            'question_id1', 'owner_id', question_state_data, linked_skill_ids)
-        self.assertTrue(
-            question_models.QuestionModel
-            .has_reference_to_user_id('owner_id'))
-        self.assertFalse(
-            question_models.QuestionModel
-            .has_reference_to_user_id('x_id'))
+            base_models.DELETION_POLICY.NOT_APPLICABLE)
 
     def test_create_question_empty_skill_id_list(self):
         state = state_domain.State.create_default_state('ABC')
@@ -82,20 +77,20 @@ class QuestionModelUnitTests(test_utils.GenericTestBase):
         self.assertItemsEqual(
             question_model.linked_skill_ids, linked_skill_ids)
 
-    def test_create_question_with_inapplicable_misconception_ids(self):
+    def test_create_question_with_inapplicable_skill_misconception_ids(self):
         state = state_domain.State.create_default_state('ABC')
         question_state_data = state.to_dict()
         linked_skill_ids = ['skill_id1', 'skill_id2']
-        inapplicable_misconception_ids = ['skill_id-1', 'skill_id-2']
+        inapplicable_skill_misconception_ids = ['skill_id-1', 'skill_id-2']
         language_code = 'en'
         version = 1
         question_model = question_models.QuestionModel.create(
             question_state_data, language_code, version,
-            linked_skill_ids, inapplicable_misconception_ids)
+            linked_skill_ids, inapplicable_skill_misconception_ids)
 
         self.assertItemsEqual(
-            question_model.inapplicable_misconception_ids,
-            inapplicable_misconception_ids)
+            question_model.inapplicable_skill_misconception_ids,
+            inapplicable_skill_misconception_ids)
 
     def test_put_multi_questions(self):
         question_state_data = self._create_valid_question_data('ABC')
@@ -155,12 +150,7 @@ class QuestionSkillLinkModelUnitTests(test_utils.GenericTestBase):
     def test_get_deletion_policy(self):
         self.assertEqual(
             question_models.QuestionSkillLinkModel.get_deletion_policy(),
-            base_models.DELETION_POLICY.KEEP)
-
-    def test_has_reference_to_user_id(self):
-        self.assertFalse(
-            question_models.QuestionSkillLinkModel
-            .has_reference_to_user_id('any_id'))
+            base_models.DELETION_POLICY.NOT_APPLICABLE)
 
     def test_create_question_skill_link(self):
         question_id = 'A Test Question Id'
@@ -701,16 +691,12 @@ class QuestionSkillLinkModelUnitTests(test_utils.GenericTestBase):
 class QuestionCommitLogEntryModelUnitTests(test_utils.GenericTestBase):
     """Tests the QuestionCommitLogEntryModel class."""
 
-    def test_get_deletion_policy(self):
-        self.assertEqual(
-            question_models.QuestionCommitLogEntryModel.get_deletion_policy(),
-            base_models.DELETION_POLICY.KEEP_IF_PUBLIC)
-
     def test_has_reference_to_user_id(self):
         commit = question_models.QuestionCommitLogEntryModel.create(
             'b', 0, 'committer_id', 'msg', 'create', [{}],
             constants.ACTIVITY_STATUS_PUBLIC, False)
         commit.question_id = 'b'
+        commit.update_timestamps()
         commit.put()
         self.assertTrue(
             question_models.QuestionCommitLogEntryModel
@@ -726,18 +712,4 @@ class QuestionSummaryModelUnitTests(test_utils.GenericTestBase):
     def test_get_deletion_policy(self):
         self.assertEqual(
             question_models.QuestionSummaryModel.get_deletion_policy(),
-            base_models.DELETION_POLICY.LOCALLY_PSEUDONYMIZE)
-
-    def test_has_reference_to_user_id(self):
-        question_summary_model = question_models.QuestionSummaryModel(
-            id='question',
-            question_content='Question',
-            interaction_id='TextInput',
-            question_model_created_on=datetime.datetime.utcnow(),
-            question_model_last_updated=datetime.datetime.utcnow()
-        )
-        question_summary_model.put()
-
-        self.assertFalse(
-            question_models.QuestionSummaryModel
-            .has_reference_to_user_id('user_id_x'))
+            base_models.DELETION_POLICY.NOT_APPLICABLE)

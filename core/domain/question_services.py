@@ -28,9 +28,12 @@ from core.domain import skill_fetchers
 from core.domain import state_domain
 from core.platform import models
 import feconf
+import python_utils
+import utils
 
 (question_models, skill_models) = models.Registry.import_models(
     [models.NAMES.question, models.NAMES.skill])
+transaction_services = models.Registry.import_transaction_services()
 
 
 def create_new_question(committer_id, question, commit_message):
@@ -50,8 +53,8 @@ def create_new_question(committer_id, question, commit_message):
         linked_skill_ids=question.linked_skill_ids,
         question_state_data_schema_version=(
             question.question_state_data_schema_version),
-        inapplicable_misconception_ids=(
-            question.inapplicable_misconception_ids)
+        inapplicable_skill_misconception_ids=(
+            question.inapplicable_skill_misconception_ids)
     )
     model.commit(
         committer_id, commit_message, [{'cmd': question_domain.CMD_CREATE_NEW}])
@@ -115,6 +118,7 @@ def create_new_question_skill_link(
 
     question_skill_link_model = question_models.QuestionSkillLinkModel.create(
         question_id, skill_id, skill_difficulty)
+    question_skill_link_model.update_timestamps()
     question_skill_link_model.put()
 
     if skill_id not in question.linked_skill_ids:
@@ -146,6 +150,7 @@ def update_question_skill_link_difficulty(
     if question_skill_link_model is None:
         raise Exception('The given question and skill are not linked.')
     question_skill_link_model.skill_difficulty = new_difficulty
+    question_skill_link_model.update_timestamps()
     question_skill_link_model.put()
 
 
@@ -301,14 +306,26 @@ def delete_question(
             still retained in the datastore. This last option is the preferred
             one.
     """
-    question_model = question_models.QuestionModel.get(question_id)
-    question_model.delete(
-        committer_id, feconf.COMMIT_MESSAGE_QUESTION_DELETED,
-        force_deletion=force_deletion)
 
-    question_models.QuestionSummaryModel.get(question_id).delete()
-    opportunity_services.increment_question_counts(
-        question_model.linked_skill_ids, -1)
+    def delete_question_model(question_id, committer_id, force_deletion):
+        """Inner function that is to be done in a transaction."""
+        question_model = question_models.QuestionModel.get_by_id(question_id)
+        if question_model is not None:
+            opportunity_services.increment_question_counts(
+                question_model.linked_skill_ids, -1)
+        question_models.QuestionModel.delete_multi(
+            [question_id], committer_id,
+            feconf.COMMIT_MESSAGE_QUESTION_DELETED,
+            force_deletion=force_deletion)
+
+    transaction_services.run_in_transaction(
+        delete_question_model, question_id,
+        committer_id, force_deletion=force_deletion)
+
+    question_summary_model = (
+        question_models.QuestionSummaryModel.get(question_id, False))
+    if question_summary_model is not None:
+        question_summary_model.delete()
 
 
 def get_question_skill_link_from_model(
@@ -526,8 +543,8 @@ def apply_change_list(question_id, change_list):
         Question. The resulting question domain object.
     """
     question = get_question_by_id(question_id)
-    question_property_inapplicable_misconception_ids = (
-        question_domain.QUESTION_PROPERTY_INAPPLICABLE_MISCONCEPTION_IDS)
+    question_property_inapplicable_skill_misconception_ids = (
+        question_domain.QUESTION_PROPERTY_INAPPLICABLE_SKILL_MISCONCEPTION_IDS)
     try:
         for change in change_list:
             if change.cmd == question_domain.CMD_UPDATE_QUESTION_PROPERTY:
@@ -543,8 +560,8 @@ def apply_change_list(question_id, change_list):
                       question_domain.QUESTION_PROPERTY_LINKED_SKILL_IDS):
                     question.update_linked_skill_ids(change.new_value)
                 elif (change.property_name ==
-                      question_property_inapplicable_misconception_ids):
-                    question.update_inapplicable_misconception_ids(
+                      question_property_inapplicable_skill_misconception_ids):
+                    question.update_inapplicable_skill_misconception_ids(
                         change.new_value)
 
         return question
@@ -585,8 +602,8 @@ def _save_question(committer_id, question, change_list, commit_message):
     question_model.question_state_data_schema_version = (
         question.question_state_data_schema_version)
     question_model.linked_skill_ids = question.linked_skill_ids
-    question_model.inapplicable_misconception_ids = (
-        question.inapplicable_misconception_ids)
+    question_model.inapplicable_skill_misconception_ids = (
+        question.inapplicable_skill_misconception_ids)
     change_dicts = [change.to_dict() for change in change_list]
     question_model.commit(committer_id, commit_message, change_dicts)
     question.version += 1
@@ -646,7 +663,7 @@ def compute_summary_of_question(question):
         answer_group.to_dict()['tagged_skill_misconception_id']
         for answer_group in answer_groups
         if answer_group.to_dict()['tagged_skill_misconception_id']]
-    misconception_ids.extend(question.inapplicable_misconception_ids)
+    misconception_ids.extend(question.inapplicable_skill_misconception_ids)
     interaction_id = question.question_state_data.interaction.id
     question_summary = question_domain.QuestionSummary(
         question.id, question_content, misconception_ids, interaction_id,
@@ -671,6 +688,7 @@ def save_question_summary(question_summary):
         interaction_id=question_summary.interaction_id
     )
 
+    question_summary_model.update_timestamps()
     question_summary_model.put()
 
 
@@ -712,3 +730,61 @@ def get_interaction_id_for_question(question_id):
     if question is None:
         raise Exception('No questions exists with the given question id.')
     return question.question_state_data.interaction.id
+
+
+def untag_deleted_misconceptions(
+        committer_id, skill_id, skill_description,
+        deleted_skill_misconception_ids):
+    """Untags deleted misconceptions from questions belonging
+    to a skill with the provided skill_id.
+
+    Args:
+        committer_id: str. The id of the user who triggered the update.
+        skill_id: str. The skill id.
+        skill_description: str. The description of the skill.
+        deleted_skill_misconception_ids: list(str). The skill misconception
+            ids of deleted misconceptions. The list items take the form
+            <skill_id>-<misconception_id>.
+    """
+    question_skill_links = get_question_skill_links_of_skill(
+        skill_id, skill_description)
+    question_ids = [model.question_id for model in question_skill_links]
+    questions = question_fetchers.get_questions_by_ids(question_ids)
+    for question in questions:
+        change_list = []
+        inapplicable_skill_misconception_ids = (
+            question.inapplicable_skill_misconception_ids)
+        deleted_inapplicable_skill_misconception_ids = (
+            list(
+                set(deleted_skill_misconception_ids) &
+                set(inapplicable_skill_misconception_ids)))
+        if deleted_inapplicable_skill_misconception_ids:
+            new_inapplicable_skill_misconception_ids = (
+                utils.compute_list_difference(
+                    question.inapplicable_skill_misconception_ids,
+                    deleted_inapplicable_skill_misconception_ids))
+            change_list.append(question_domain.QuestionChange({
+                'cmd': 'update_question_property',
+                'property_name': 'inapplicable_skill_misconception_ids',
+                'new_value': new_inapplicable_skill_misconception_ids,
+                'old_value': question.inapplicable_skill_misconception_ids
+            }))
+        old_question_state_data_dict = question.question_state_data.to_dict()
+        answer_groups = (
+            list(question.question_state_data.interaction.answer_groups))
+        for i in python_utils.RANGE(len(answer_groups)):
+            tagged_skill_misconception_id = (
+                answer_groups[i].to_dict()['tagged_skill_misconception_id'])
+            if (tagged_skill_misconception_id
+                    in deleted_skill_misconception_ids):
+                answer_groups[i].tagged_skill_misconception_id = None
+        question.question_state_data.interaction.answer_groups = answer_groups
+        change_list.append(question_domain.QuestionChange({
+            'cmd': 'update_question_property',
+            'property_name': 'question_state_data',
+            'new_value': question.question_state_data.to_dict(),
+            'old_value': old_question_state_data_dict
+        }))
+        update_question(
+            committer_id, question.id, change_list,
+            'Untagged deleted skill misconception ids.')

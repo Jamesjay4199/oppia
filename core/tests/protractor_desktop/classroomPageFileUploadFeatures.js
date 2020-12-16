@@ -63,6 +63,7 @@ describe('Classroom page functionality', function() {
         'Topic 1', 'topic-one', 'Description', false);
       await topicEditorPage.submitTopicThumbnail('../data/test2_svg.svg', true);
       await topicEditorPage.updateMetaTagContent('topic meta tag');
+      await topicEditorPage.updatePageTitleFragment('topic page title');
       await topicEditorPage.saveTopic('Added thumbnail.');
       var url = await browser.getCurrentUrl();
       var topicId = url.split('/')[4].slice(0, -1);
@@ -77,7 +78,9 @@ describe('Classroom page functionality', function() {
           await elem.setValue(topicId);
         });
       await classroomPage.get('math');
-      await classroomPage.expectNumberOfTopicsToBe(0);
+      // Even if the topic is unpublished, an unclickable tile is shown
+      // currently.
+      await classroomPage.expectNumberOfTopicsToBe(1);
       await topicsAndSkillsDashboardPage.get();
       (
         await
@@ -85,7 +88,8 @@ describe('Classroom page functionality', function() {
           'Skill 1', 'Concept card explanation', false));
       await topicsAndSkillsDashboardPage.get();
       await topicsAndSkillsDashboardPage.navigateToSkillsTab();
-      await topicsAndSkillsDashboardPage.assignSkillWithIndexToTopic(0, 0);
+      await topicsAndSkillsDashboardPage.assignSkillToTopic(
+        'Skill 1', 'Topic 1');
       await topicsAndSkillsDashboardPage.get();
       await topicsAndSkillsDashboardPage.navigateToTopicWithIndex(0);
       await topicEditorPage.addSubtopic(

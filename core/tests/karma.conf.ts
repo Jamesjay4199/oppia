@@ -14,10 +14,9 @@ module.exports = function(config) {
       // Since jquery, angular-mocks and math-expressions
       // are not bundled, they will be treated separately.
       'third_party/static/jquery-3.5.1/jquery.min.js',
-      'third_party/static/angularjs-1.7.9/angular.js',
+      'third_party/static/angularjs-1.8.2/angular.js',
       'core/templates/karma.module.ts',
-      'third_party/static/angularjs-1.7.9/angular-mocks.js',
-      'third_party/static/math-expressions-1.7.0/math-expressions.js',
+      'third_party/static/angularjs-1.8.2/angular-mocks.js',
       generatedJs,
       // Note that unexpected errors occur ("Cannot read property 'num' of
       // undefined" in MusicNotesInput.js) if the order of core/templates/...
@@ -149,7 +148,14 @@ module.exports = function(config) {
           'node_modules',
           'third_party',
         ],
-        extensions: ['.ts', '.js', '.json', '.html', '.svg', '.png']
+        extensions: ['.ts', '.js', '.json', '.html', '.svg', '.png'],
+        alias: {
+          // This is needed because in app.constants.ts we need to import
+          // assets/constants.ts. We can't directly write import 'constants'
+          // because a module named 'constants' is defined in '@types/node'
+          // package.
+          'assets/constants': 'constants.ts'
+        }
       },
       devtool: 'inline-cheap-source-map',
       module: {
@@ -194,7 +200,12 @@ module.exports = function(config) {
           {
             test: /\.css$/,
             use: [
-              'style-loader',
+              {
+                loader: 'style-loader',
+                options: {
+                  esModule: false
+                }
+              },
               {
                 loader: 'css-loader',
                 options: {

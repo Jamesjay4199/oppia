@@ -19,8 +19,10 @@
 from __future__ import absolute_import  # pylint: disable=import-only-modules
 from __future__ import unicode_literals  # pylint: disable=import-only-modules
 
+import collections
 import copy
 import datetime
+import re
 
 from constants import constants
 from core.domain import change_domain
@@ -47,8 +49,8 @@ from pylatexenc import latex2text
 QUESTION_PROPERTY_LANGUAGE_CODE = 'language_code'
 QUESTION_PROPERTY_QUESTION_STATE_DATA = 'question_state_data'
 QUESTION_PROPERTY_LINKED_SKILL_IDS = 'linked_skill_ids'
-QUESTION_PROPERTY_INAPPLICABLE_MISCONCEPTION_IDS = (
-    'inapplicable_misconception_ids')
+QUESTION_PROPERTY_INAPPLICABLE_SKILL_MISCONCEPTION_IDS = (
+    'inapplicable_skill_misconception_ids')
 
 # This takes additional 'property_name' and 'new_value' parameters and,
 # optionally, 'old_value'.
@@ -84,7 +86,7 @@ class QuestionChange(change_domain.BaseChange):
         QUESTION_PROPERTY_QUESTION_STATE_DATA,
         QUESTION_PROPERTY_LANGUAGE_CODE,
         QUESTION_PROPERTY_LINKED_SKILL_IDS,
-        QUESTION_PROPERTY_INAPPLICABLE_MISCONCEPTION_IDS)
+        QUESTION_PROPERTY_INAPPLICABLE_SKILL_MISCONCEPTION_IDS)
 
     ALLOWED_COMMANDS = [{
         'name': CMD_CREATE_NEW,
@@ -135,7 +137,7 @@ class Question(python_utils.OBJECT):
     def __init__(
             self, question_id, question_state_data,
             question_state_data_schema_version, language_code, version,
-            linked_skill_ids, inapplicable_misconception_ids,
+            linked_skill_ids, inapplicable_skill_misconception_ids,
             created_on=None, last_updated=None):
         """Constructs a Question domain object.
 
@@ -151,8 +153,9 @@ class Question(python_utils.OBJECT):
             version: int. The version of the question.
             linked_skill_ids: list(str). Skill ids linked to the question.
                 Note: Do not update this field manually.
-            inapplicable_misconception_ids: list(str). Optional misconception
-                ids that are marked as not relevant to the question.
+            inapplicable_skill_misconception_ids: list(str). Optional
+                misconception ids that are marked as not relevant to the
+                question.
             created_on: datetime.datetime. Date and time when the question was
                 created.
             last_updated: datetime.datetime. Date and time when the
@@ -165,8 +168,8 @@ class Question(python_utils.OBJECT):
             question_state_data_schema_version)
         self.version = version
         self.linked_skill_ids = linked_skill_ids
-        self.inapplicable_misconception_ids = (
-            inapplicable_misconception_ids)
+        self.inapplicable_skill_misconception_ids = (
+            inapplicable_skill_misconception_ids)
         self.created_on = created_on
         self.last_updated = last_updated
 
@@ -184,8 +187,8 @@ class Question(python_utils.OBJECT):
             'language_code': self.language_code,
             'version': self.version,
             'linked_skill_ids': self.linked_skill_ids,
-            'inapplicable_misconception_ids': (
-                self.inapplicable_misconception_ids)
+            'inapplicable_skill_misconception_ids': (
+                self.inapplicable_skill_misconception_ids)
         }
 
     @classmethod
@@ -730,6 +733,69 @@ class Question(python_utils.OBJECT):
         return question_state_dict
 
     @classmethod
+    def _convert_state_v38_dict_to_v39_dict(cls, question_state_dict):
+        """Converts from version 38 to 39. Version 39 adds a new
+        customization arg to NumericExpressionInput interaction which allows
+        creators to modify the placeholder text.
+
+        Args:
+            question_state_dict: dict. A dict where each key-value pair
+                represents respectively, a state name and a dict used to
+                initialize a State domain object.
+
+        Returns:
+            dict. The converted question_state_dict.
+        """
+        if question_state_dict['interaction']['id'] == 'NumericExpressionInput':
+            customization_args = question_state_dict[
+                'interaction']['customization_args']
+            customization_args.update({
+                'placeholder': {
+                    'value': {
+                        'content_id': 'ca_placeholder_0',
+                        'unicode_str': (
+                            'Type an expression here, using only numbers.')
+                    }
+                }
+            })
+            question_state_dict['written_translations']['translations_mapping'][
+                'ca_placeholder_0'] = {}
+            question_state_dict['recorded_voiceovers']['voiceovers_mapping'][
+                'ca_placeholder_0'] = {}
+
+        return question_state_dict
+
+    @classmethod
+    def _convert_state_v39_dict_to_v40_dict(cls, question_state_dict):
+        """Converts from version 39 to 40. Version 40 converts TextInput rule
+        inputs from NormalizedString to SetOfNormalizedString.
+
+        Args:
+            question_state_dict: dict. A dict where each key-value pair
+                represents respectively, a state name and a dict used to
+                initialize a State domain object.
+
+        Returns:
+            dict. The converted question_state_dict.
+        """
+        if question_state_dict['interaction']['id'] != 'TextInput':
+            return question_state_dict
+
+        answer_group_dicts = question_state_dict['interaction']['answer_groups']
+        for answer_group_dict in answer_group_dicts:
+            rule_type_to_inputs = collections.defaultdict(set)
+            for rule_spec_dict in answer_group_dict['rule_specs']:
+                rule_type = rule_spec_dict['rule_type']
+                rule_inputs = rule_spec_dict['inputs']['x']
+                rule_type_to_inputs[rule_type].add(rule_inputs)
+            answer_group_dict['rule_specs'] = [{
+                'rule_type': rule_type,
+                'inputs': {'x': list(rule_type_to_inputs[rule_type])}
+            } for rule_type in rule_type_to_inputs]
+
+        return question_state_dict
+
+    @classmethod
     def update_state_from_model(
             cls, versioned_question_state, current_state_schema_version):
         """Converts the state object contained in the given
@@ -782,19 +848,30 @@ class Question(python_utils.OBJECT):
         if len(set(self.linked_skill_ids)) != len(self.linked_skill_ids):
             raise utils.ValidationError(
                 'linked_skill_ids has duplicate skill ids')
-
-        if not (isinstance(self.inapplicable_misconception_ids, list) and (
+        inapplicable_skill_misconception_ids_is_list = isinstance(
+            self.inapplicable_skill_misconception_ids, list)
+        if not (inapplicable_skill_misconception_ids_is_list and (
                 all(isinstance(
                     elem, python_utils.BASESTRING) for elem in (
-                        self.inapplicable_misconception_ids)))):
+                        self.inapplicable_skill_misconception_ids)))):
             raise utils.ValidationError(
-                'Expected inapplicable_misconception_ids to be a list of '
-                'strings, received %s' % self.inapplicable_misconception_ids)
+                'Expected inapplicable_skill_misconception_ids to be a list '
+                'of strings, received %s'
+                % self.inapplicable_skill_misconception_ids)
 
-        if len(set(self.inapplicable_misconception_ids)) != len(
-                self.inapplicable_misconception_ids):
+        if not (all(
+                re.match(
+                    constants.VALID_SKILL_MISCONCEPTION_ID_REGEX, elem
+                ) for elem in self.inapplicable_skill_misconception_ids)):
             raise utils.ValidationError(
-                'inapplicable_misconception_ids has duplicate values')
+                'Expected inapplicable_skill_misconception_ids to be a list '
+                'of strings of the format <skill_id>-<misconception_id>, '
+                'received %s' % self.inapplicable_skill_misconception_ids)
+
+        if len(set(self.inapplicable_skill_misconception_ids)) != len(
+                self.inapplicable_skill_misconception_ids):
+            raise utils.ValidationError(
+                'inapplicable_skill_misconception_ids has duplicate values')
 
         if not isinstance(self.question_state_data_schema_version, int):
             raise utils.ValidationError(
@@ -876,7 +953,7 @@ class Question(python_utils.OBJECT):
             question_dict['question_state_data_schema_version'],
             question_dict['language_code'], question_dict['version'],
             question_dict['linked_skill_ids'],
-            question_dict['inapplicable_misconception_ids'])
+            question_dict['inapplicable_skill_misconception_ids'])
 
         return question
 
@@ -915,17 +992,18 @@ class Question(python_utils.OBJECT):
         """
         self.linked_skill_ids = list(set(linked_skill_ids))
 
-    def update_inapplicable_misconception_ids(
-            self, inapplicable_misconception_ids):
+    def update_inapplicable_skill_misconception_ids(
+            self, inapplicable_skill_misconception_ids):
         """Updates the optional misconception ids marked as not applicable
         to the question.
 
         Args:
-            inapplicable_misconception_ids: list(str). The optional
-                misconception ids marked as not applicable to the question.
+            inapplicable_skill_misconception_ids: list(str). The optional
+                skill misconception ids marked as not applicable to the
+                question.
         """
-        self.inapplicable_misconception_ids = list(
-            set(inapplicable_misconception_ids))
+        self.inapplicable_skill_misconception_ids = list(
+            set(inapplicable_skill_misconception_ids))
 
     def update_question_state_data(self, question_state_data):
         """Updates the question data of the question.

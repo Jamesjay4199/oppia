@@ -51,6 +51,17 @@ TS_IGNORE_EXCEPTIONS_FILEPATH = os.path.join(
 TS_IGNORE_EXCEPTIONS = json.load(python_utils.open_file(
     TS_IGNORE_EXCEPTIONS_FILEPATH, 'r'))
 
+# The INJECTABLES_TO_IGNORE contains a list of services that are not supposed
+# to be included in angular-services.index.ts. These services are not required
+# for our application to run but are only present to aid tests or belong to a
+# class of legacy services that will soon be removed from the codebase.
+# NOTE TO DEVELOPERS: Don't add any more files to this list. If you have any
+# questions, please talk to @srijanreddy98.
+INJECTABLES_TO_IGNORE = [
+    'MockIgnoredService', # This file is required for the js-ts-linter-test.
+    'UpgradedServices' # We don't want this service to be present in the index.
+]
+
 
 def _get_expression_from_node_if_one_exists(
         parsed_node, components_to_check):
@@ -218,46 +229,6 @@ class JsTsLintChecksManager(python_utils.OBJECT):
             COMPILED_TYPESCRIPT_TMP_PATH,
             os.path.relpath(filepath).replace('.ts', '.js'))
         return compiled_js_filepath
-
-    def _check_http_requests(self):
-        """Checks if the http requests are made only by
-        backend-api.service.ts.
-
-        Returns:
-            TaskResult. A TaskResult object representing the result of the lint
-            check.
-        """
-        http_client_pattern = r':\n? *HttpClient'
-
-        excluded_files = [
-            'core/templates/services/request-interceptor.service.spec.ts'
-        ]
-
-        error_messages = []
-        name = 'HTTP request'
-
-        failed = False
-
-        for file_path in self.all_filepaths:
-            if file_path in excluded_files:
-                continue
-
-            if file_path.endswith('backend-api.service.ts'):
-                continue
-
-            file_content = self.file_cache.read(file_path)
-
-            if re.findall(http_client_pattern, file_content):
-                failed = True
-                error_message = (
-                    '%s --> An instance of HttpClient is found in this '
-                    'file. You are not allowed to create http requests '
-                    'from files that are not backend api services.' % (
-                        file_path))
-                error_messages.append(error_message)
-
-        return concurrent_task_utils.TaskResult(
-            name, failed, error_messages, error_messages)
 
     def _check_ts_ignore(self):
         """Checks if ts ignore is used.
@@ -843,21 +814,27 @@ class JsTsLintChecksManager(python_utils.OBJECT):
             # *.constants.ajs.ts file are in sync.
             if filepath.endswith('.constants.ts') and (
                     is_corresponding_angularjs_filepath):
-                # Ignore if file contains only type definitions for
-                # constants.
                 for node in parsed_nodes:
-                    if 'declarations' in node.keys():
-                        try:
-                            angular_constants_nodes = (
-                                node.declarations[0].init.callee.body.body)
-                        except Exception:
-                            continue
-                for angular_constant_node in angular_constants_nodes:
-                    if not angular_constant_node.expression:
+                    try:
+                        # Here we are treating 'app.constants.ts' differently
+                        # because it has a different structure than rest of the
+                        # '*constants.ts' files because it inherits constants
+                        # from 'assets/constants.ts'.
+                        angular_constants_nodes = (
+                            node.expression.right.arguments[1].properties
+                            if filepath.endswith('app.constants.ts') else
+                            node.expression.right.properties)
+                    # We need a try-except block here beacuse we need a node
+                    # that has properties exactly as we have defined above.
+                    # And some nodes may not have those properties and may
+                    # raise the following errors. So, we need to ignore
+                    # those nodes.
+                    except (AttributeError, IndexError, TypeError):
                         continue
-                    angular_constant_name = (
-                        angular_constant_node.expression.left.property.name)
-                    angular_constants_list.append(angular_constant_name)
+
+                for angular_constant_node in angular_constants_nodes:
+                    angular_constants_list.append(
+                        angular_constant_node.key.name)
 
                 angular_constants_set = set(angular_constants_list)
                 if len(angular_constants_set) != len(
@@ -867,6 +844,19 @@ class JsTsLintChecksManager(python_utils.OBJECT):
                         '%s --> Duplicate constant declaration found.'
                         % filepath)
                     error_messages.append(error_message)
+
+            # Check that the *constants.ts files have a 'as const' at the end.
+            if filepath.endswith('.constants.ts'):
+                file_content = self.file_cache.read(filepath)
+                if not file_content.endswith('} as const;\n'):
+                    failed = True
+                    error_message = (
+                        '%s --> This constants file doesn\'t have \'as const\' '
+                        'at the end. A constants file should have the '
+                        'following structure.\nexport const SomeConstants = '
+                        '{ ... } as const;' % filepath)
+                    error_messages.append(error_message)
+
         return concurrent_task_utils.TaskResult(
             name, failed, error_messages, error_messages)
 
@@ -960,6 +950,56 @@ class JsTsLintChecksManager(python_utils.OBJECT):
         return concurrent_task_utils.TaskResult(
             name, failed, error_messages, error_messages)
 
+    def _check_angular_services_index(self):
+        """Finds all @Injectable classes and makes sure that they are added to
+            Oppia root and Angular Services Index.
+
+        Returns:
+            all_messages: str. All the messages returned by the lint checks.
+        """
+        name = 'Angular Services Index file'
+        error_messages = []
+        injectable_pattern = '%s%s' % (
+            'Injectable\\({\\n*\\s*providedIn: \'root\'\\n*}\\)\\n',
+            'export class ([A-Za-z0-9]*)')
+        angular_services_index_path = (
+            './core/templates/services/angular-services.index.ts')
+        angular_services_index = self.file_cache.read(
+            angular_services_index_path)
+        error_messages = []
+        failed = False
+        for file_path in self.ts_files:
+            file_content = self.file_cache.read(file_path)
+            class_names = re.findall(injectable_pattern, file_content)
+            for class_name in class_names:
+                if class_name in INJECTABLES_TO_IGNORE:
+                    continue
+                import_statement_regex = 'import {[\\s*\\w+,]*%s' % class_name
+                if not re.search(
+                        import_statement_regex, angular_services_index):
+                    error_message = (
+                        'Please import %s to Angular Services Index file in %s'
+                        'from %s'
+                        % (class_name, angular_services_index_path, file_path))
+                    error_messages.append(error_message)
+                    failed = True
+
+                service_name_type_pair_regex = (
+                    '\\[\'%s\',\\n*\\s*%s\\]' % (class_name, class_name))
+                service_name_type_pair = (
+                    '[\'%s\', %s]' % (class_name, class_name))
+
+                if not re.search(
+                        service_name_type_pair_regex, angular_services_index):
+                    error_message = (
+                        'Please add the pair %s to the angularServices in %s'
+                        % (service_name_type_pair, angular_services_index_path)
+                    )
+                    error_messages.append(error_message)
+                    failed = True
+        return concurrent_task_utils.TaskResult(
+            name, failed, error_messages, error_messages)
+
     def perform_all_lint_checks(self):
         """Perform all the lint checks and returns the messages returned by all
         the checks.
@@ -987,7 +1027,6 @@ class JsTsLintChecksManager(python_utils.OBJECT):
         linter_stdout = []
 
         linter_stdout.append(self._check_extra_js_files())
-        linter_stdout.append(self._check_http_requests())
         linter_stdout.append(self._check_js_and_ts_component_name_and_count())
         linter_stdout.append(self._check_directive_scope())
         linter_stdout.append(self._check_sorted_dependencies())
@@ -997,6 +1036,7 @@ class JsTsLintChecksManager(python_utils.OBJECT):
         linter_stdout.append(self._check_comments())
         linter_stdout.append(self._check_ts_ignore())
         linter_stdout.append(self._check_ts_expect_error())
+        linter_stdout.append(self._check_angular_services_index())
 
         # Clear temp compiled typescipt files.
         shutil.rmtree(COMPILED_TYPESCRIPT_TMP_PATH, ignore_errors=True)
@@ -1056,7 +1096,8 @@ class ThirdPartyJsTsLintChecksManager(python_utils.OBJECT):
             # string('') which is at the index 1 and message-id from the end.
             if re.search(r'^\d+:\d+', line.lstrip()):
                 # Replacing message-id with an empty string('').
-                line = re.sub(r'(\w+-*)+$', '', line)
+                if not 'Parsing error:' in line:
+                    line = re.sub(r'(\w+-*)+$', '', line)
                 error_string = re.search(r'error', line).group(0)
                 error_message = line.replace(error_string, '', 1)
             else:
@@ -1075,45 +1116,31 @@ class ThirdPartyJsTsLintChecksManager(python_utils.OBJECT):
         eslint_path = os.path.join(
             'node_modules', 'eslint', 'bin', 'eslint.js')
         if not os.path.exists(eslint_path):
-            python_utils.PRINT('')
-            python_utils.PRINT(
-                'ERROR    Please run start.sh first to install node-eslint ')
-            python_utils.PRINT(
-                '         and its dependencies.')
-            sys.exit(1)
+            raise Exception(
+                'ERROR    Please run start.sh first to install node-eslint '
+                'and its dependencies.')
 
         files_to_lint = self.all_filepaths
-        num_files_with_errors = 0
         error_messages = []
         full_error_messages = []
         failed = False
         name = 'ESLint'
 
         eslint_cmd_args = [node_path, eslint_path, '--quiet']
-        result_list = []
-        for _, filepath in enumerate(files_to_lint):
-            proc_args = eslint_cmd_args + [filepath]
-            proc = subprocess.Popen(
-                proc_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        proc_args = eslint_cmd_args + files_to_lint
+        proc = subprocess.Popen(
+            proc_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-            encoded_linter_stdout, encoded_linter_stderr = proc.communicate()
-            linter_stdout = encoded_linter_stdout.decode(encoding='utf-8')
-            linter_stderr = encoded_linter_stderr.decode(encoding='utf-8')
-            if linter_stderr:
-                python_utils.PRINT('LINTER FAILED')
-                python_utils.PRINT(linter_stderr)
-                sys.exit(1)
+        encoded_linter_stdout, encoded_linter_stderr = proc.communicate()
+        linter_stdout = encoded_linter_stdout.decode(encoding='utf-8')
+        linter_stderr = encoded_linter_stderr.decode(encoding='utf-8')
+        if linter_stderr:
+            raise Exception(linter_stderr)
 
-            if linter_stdout:
-                num_files_with_errors += 1
-                result_list.append(linter_stdout)
-
-        if num_files_with_errors:
+        if linter_stdout:
             failed = True
-            for result in result_list:
-                full_error_messages.append(result)
-                error_messages.append(
-                    self._get_trimmed_error_output(result))
+            full_error_messages.append(linter_stdout)
+            error_messages.append(self._get_trimmed_error_output(linter_stdout))
 
         return concurrent_task_utils.TaskResult(
             name, failed, error_messages, full_error_messages)

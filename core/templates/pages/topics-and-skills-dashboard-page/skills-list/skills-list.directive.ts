@@ -74,11 +74,11 @@ angular.module('oppia').directive('skillsList', [
         'skills-list.directive.html'),
       controllerAs: '$ctrl',
       controller: [
-        '$scope', '$timeout', '$uibModal',
+        '$rootScope', '$scope', '$timeout', '$uibModal',
         'EditableTopicBackendApiService', 'SkillBackendApiService',
         'TopicsAndSkillsDashboardBackendApiService',
         function(
-            $scope, $timeout, $uibModal,
+            $rootScope, $scope, $timeout, $uibModal,
             EditableTopicBackendApiService, SkillBackendApiService,
             TopicsAndSkillsDashboardBackendApiService) {
           var ctrl = this;
@@ -102,17 +102,38 @@ angular.module('oppia').directive('skillsList', [
               },
               windowClass: 'delete-skill-modal',
               controller: 'DeleteSkillModalController'
-            }).result.then(function() {
+            }).result.then(() => {
               SkillBackendApiService.deleteSkill(skillId).then(
-                function(status) {
-                  $timeout(function() {
+                () => {
+                  setTimeout(() => {
                     TopicsAndSkillsDashboardBackendApiService.
                       onTopicsAndSkillsDashboardReinitialized.emit();
                     var successToast = 'The skill has been deleted.';
                     AlertsService.addSuccessMessage(successToast, 1000);
                   }, 100);
+                  $rootScope.$apply();
                 }
-              );
+              // eslint-disable-next-line dot-notation
+              ).catch(errorMessage => {
+                var errorToast = null;
+                // This error is thrown as part of a final validation check in
+                // the backend, hence the message does not include instructions
+                // for the user to follow.
+                if (errorMessage.includes('does not have any skills linked')) {
+                  errorToast = (
+                    'The skill is assigned to a subtopic in a published ' +
+                    'topic. Please unpublish the topic before deleting ' +
+                    'this skill.');
+                } else {
+                  errorToast = errorMessage;
+                }
+                setTimeout(() => {
+                  TopicsAndSkillsDashboardBackendApiService.
+                    onTopicsAndSkillsDashboardReinitialized.emit();
+                }, 100);
+                AlertsService.addInfoMessage(errorToast, 5000);
+                $rootScope.$apply();
+              });
             }, function() {
               // Note to developers:
               // This callback is triggered when the Cancel button is clicked.
@@ -159,8 +180,13 @@ angular.module('oppia').directive('skillsList', [
                   var successToast = (
                     'The skill has been unassigned to the topic.');
                   AlertsService.addSuccessMessage(successToast, 1000);
+                  $rootScope.$applyAsync();
                 });
               }
+            }, () => {
+              // Note to developers:
+              // This callback is triggered when the Cancel button is clicked.
+              // No further action is needed.
             });
           };
 
@@ -198,6 +224,7 @@ angular.module('oppia').directive('skillsList', [
                       var successToast = (
                         'The skill has been assigned to the topic.');
                       AlertsService.addSuccessMessage(successToast, 1000);
+                      $rootScope.$applyAsync();
                     });
                   }
                 }

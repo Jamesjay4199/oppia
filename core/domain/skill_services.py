@@ -29,6 +29,7 @@ from core.domain import skill_domain
 from core.domain import skill_fetchers
 from core.domain import state_domain
 from core.domain import suggestion_services
+from core.domain import taskqueue_services
 from core.domain import topic_domain
 from core.domain import topic_fetchers
 from core.domain import topic_services
@@ -747,6 +748,21 @@ def update_skill(committer_id, skill_id, change_list, commit_message):
     skill = apply_change_list(skill_id, change_list, committer_id)
     _save_skill(committer_id, skill, commit_message, change_list)
     create_skill_summary(skill.id)
+    misconception_is_deleted = any([
+        change.cmd == skill_domain.CMD_DELETE_SKILL_MISCONCEPTION
+        for change in change_list
+    ])
+    if misconception_is_deleted:
+        deleted_skill_misconception_ids = [
+            skill.generate_skill_misconception_id(change.misconception_id)
+            for change in change_list
+            if change.cmd == skill_domain.CMD_DELETE_SKILL_MISCONCEPTION
+        ]
+        taskqueue_services.defer(
+            taskqueue_services.FUNCTION_ID_UNTAG_DELETED_MISCONCEPTIONS,
+            taskqueue_services.QUEUE_NAME_ONE_OFF_JOBS,
+            committer_id, skill_id, skill.description,
+            deleted_skill_misconception_ids)
 
 
 def delete_skill(committer_id, skill_id, force_deletion=False):
@@ -761,10 +777,8 @@ def delete_skill(committer_id, skill_id, force_deletion=False):
             still retained in the datastore. This last option is the preferred
             one.
     """
-    skill_model = skill_models.SkillModel.get(skill_id)
-    skill_model.delete(
-        committer_id, feconf.COMMIT_MESSAGE_SKILL_DELETED,
-        force_deletion=force_deletion)
+    skill_models.SkillModel.delete_multi(
+        [skill_id], committer_id, '', force_deletion=force_deletion)
 
     # This must come after the skill is retrieved. Otherwise the memcache
     # key will be reinstated.
@@ -787,7 +801,10 @@ def delete_skill_summary(skill_id):
             be deleted.
     """
 
-    skill_models.SkillSummaryModel.get(skill_id).delete()
+    skill_summary_model = (
+        skill_models.SkillSummaryModel.get(skill_id, False))
+    if skill_summary_model is not None:
+        skill_summary_model.delete()
 
 
 def compute_summary_of_skill(skill):
@@ -849,10 +866,13 @@ def save_skill_summary(skill_summary):
         skill_models.SkillSummaryModel.get_by_id(skill_summary.id))
     if skill_summary_model is not None:
         skill_summary_model.populate(**skill_summary_dict)
+        skill_summary_model.update_timestamps()
         skill_summary_model.put()
     else:
         skill_summary_dict['id'] = skill_summary.id
-        skill_models.SkillSummaryModel(**skill_summary_dict).put()
+        model = skill_models.SkillSummaryModel(**skill_summary_dict)
+        model.update_timestamps()
+        model.put()
 
 
 def create_user_skill_mastery(user_id, skill_id, degree_of_mastery):
@@ -882,6 +902,7 @@ def save_user_skill_mastery(user_skill_mastery):
         skill_id=user_skill_mastery.skill_id,
         degree_of_mastery=user_skill_mastery.degree_of_mastery)
 
+    user_skill_mastery_model.update_timestamps()
     user_skill_mastery_model.put()
 
 
@@ -902,6 +923,8 @@ def create_multi_user_skill_mastery(user_id, degrees_of_mastery):
                 user_id, skill_id),
             user_id=user_id, skill_id=skill_id,
             degree_of_mastery=degree_of_mastery))
+    user_models.UserSkillMasteryModel.update_timestamps_multi(
+        user_skill_mastery_models)
     user_models.UserSkillMasteryModel.put_multi(user_skill_mastery_models)
 
 

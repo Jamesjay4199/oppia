@@ -39,7 +39,7 @@ import { SolutionValidityService } from
   'pages/exploration-editor-page/editor-tab/services/solution-validity.service';
 import { State } from 'domain/state/StateObjectFactory';
 
-interface AnswerChoice {
+export interface AnswerChoice {
   val: string | number;
   label: string;
 }
@@ -80,6 +80,7 @@ export class StateEditorService {
   stateSolutionEditorInitialised: boolean = false;
   stateEditorDirectiveInitialised: boolean = false;
   currentRuleInputIsValid: boolean = false;
+  inapplicableSkillMisconceptionIds: string[] = [];
 
   updateStateContentEditorInitialised(): void {
     this.stateContentEditorInitialised = true;
@@ -251,6 +252,16 @@ export class StateEditorService {
 
   getStateNames(): string[] {
     return this.stateNames;
+  }
+
+  setInapplicableSkillMisconceptionIds(
+      newInapplicableSkillMisconceptionIds: string[]): void {
+    this.inapplicableSkillMisconceptionIds = (
+      newInapplicableSkillMisconceptionIds);
+  }
+
+  getInapplicableSkillMisconceptionIds(): string[] {
+    return this.inapplicableSkillMisconceptionIds;
   }
 
   isCurrentSolutionValid(): boolean {

@@ -23,7 +23,9 @@ import collections
 import logging
 
 from core.domain import caching_services
+from core.domain import feedback_services
 from core.domain import opportunity_services
+from core.domain import rights_domain
 from core.domain import role_services
 from core.domain import state_domain
 from core.domain import story_fetchers
@@ -193,7 +195,8 @@ def _create_topic(committer_id, topic, commit_message, commit_cmds):
         next_subtopic_id=topic.next_subtopic_id,
         subtopics=[subtopic.to_dict() for subtopic in topic.subtopics],
         meta_tag_content=topic.meta_tag_content,
-        practice_tab_is_displayed=topic.practice_tab_is_displayed
+        practice_tab_is_displayed=topic.practice_tab_is_displayed,
+        page_title_fragment_for_web=topic.page_title_fragment_for_web
     )
     commit_cmd_dicts = [commit_cmd.to_dict() for commit_cmd in commit_cmds]
     model.commit(committer_id, commit_message, commit_cmd_dicts)
@@ -382,6 +385,9 @@ def apply_change_list(topic_id, change_list):
                 elif (change.property_name ==
                       topic_domain.TOPIC_PROPERTY_PRACTICE_TAB_IS_DISPLAYED):
                     topic.update_practice_tab_is_displayed(change.new_value)
+                elif (change.property_name ==
+                      topic_domain.TOPIC_PROPERTY_PAGE_TITLE_FRAGMENT_FOR_WEB):
+                    topic.update_page_title_fragment_for_web(change.new_value)
             elif (change.cmd ==
                   subtopic_page_domain.CMD_UPDATE_SUBTOPIC_PAGE_PROPERTY):
                 subtopic_page_id = (
@@ -510,6 +516,7 @@ def _save_topic(committer_id, topic, commit_message, change_list):
     topic_model.language_code = topic.language_code
     topic_model.meta_tag_content = topic.meta_tag_content
     topic_model.practice_tab_is_displayed = topic.practice_tab_is_displayed
+    topic_model.page_title_fragment_for_web = topic.page_title_fragment_for_web
     change_dicts = [change.to_dict() for change in change_list]
     topic_model.commit(committer_id, commit_message, change_dicts)
     caching_services.delete_multi(
@@ -834,6 +841,9 @@ def delete_topic(committer_id, topic_id, force_deletion=False):
         committer_id, feconf.COMMIT_MESSAGE_TOPIC_DELETED,
         force_deletion=force_deletion)
 
+    feedback_services.delete_threads_for_multiple_entities(
+        feconf.ENTITY_TYPE_TOPIC, [topic_id])
+
     # This must come after the topic is retrieved. Otherwise the memcache
     # key will be reinstated.
     caching_services.delete_multi(
@@ -934,10 +944,13 @@ def save_topic_summary(topic_summary):
         topic_models.TopicSummaryModel.get_by_id(topic_summary.id))
     if topic_summary_model is not None:
         topic_summary_model.populate(**topic_summary_dict)
+        topic_summary_model.update_timestamps()
         topic_summary_model.put()
     else:
         topic_summary_dict['id'] = topic_summary.id
-        topic_models.TopicSummaryModel(**topic_summary_dict).put()
+        model = topic_models.TopicSummaryModel(**topic_summary_dict)
+        model.update_timestamps()
+        model.put()
 
 
 def publish_topic(topic_id, committer_id):
@@ -1217,7 +1230,7 @@ def assign_role(committer, assignee, new_role, topic_id):
     else:
         raise Exception('Invalid role: %s' % new_role)
 
-    commit_message = 'Changed role of %s from %s to %s' % (
+    commit_message = rights_domain.ASSIGN_ROLE_COMMIT_MESSAGE_TEMPLATE % (
         assignee_username, old_role, new_role)
     commit_cmds = [topic_domain.TopicRightsChange({
         'cmd': topic_domain.CMD_CHANGE_ROLE,

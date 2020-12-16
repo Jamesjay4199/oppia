@@ -47,9 +47,9 @@ import { UrlInterpolationService } from
   'domain/utilities/url-interpolation.service';
 import { Voiceover } from 'domain/exploration/VoiceoverObjectFactory';
 
-const INTERACTION_SPECS = require('interactions/interaction_specs.json');
+import INTERACTION_SPECS from 'interactions/interaction_specs.json';
 
-interface ExplorationBackendDict {
+export interface ExplorationBackendDict {
   'init_state_name': string;
   'param_changes': ParamChangeBackendDict[];
   'param_specs': ParamSpecsBackendDict;

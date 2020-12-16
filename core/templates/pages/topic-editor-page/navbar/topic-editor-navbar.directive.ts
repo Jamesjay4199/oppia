@@ -43,12 +43,12 @@ angular.module('oppia').directive('topicEditorNavbar', [
       templateUrl: UrlInterpolationService.getDirectiveTemplateUrl(
         '/pages/topic-editor-page/navbar/topic-editor-navbar.directive.html'),
       controller: [
-        '$scope', '$uibModal', '$window', 'AlertsService',
+        '$rootScope', '$scope', '$uibModal', '$window', 'AlertsService',
         'TopicEditorRoutingService', 'TopicEditorStateService',
         'TopicRightsBackendApiService', 'UndoRedoService', 'UrlService',
         'TOPIC_VIEWER_URL_TEMPLATE',
         function(
-            $scope, $uibModal, $window, AlertsService,
+            $rootScope, $scope, $uibModal, $window, AlertsService,
             TopicEditorRoutingService, TopicEditorStateService,
             TopicRightsBackendApiService, UndoRedoService, UrlService,
             TOPIC_VIEWER_URL_TEMPLATE) {
@@ -122,6 +122,7 @@ angular.module('oppia').directive('topicEditorNavbar', [
                   var successToast = 'Mail Sent.';
                   AlertsService.addSuccessMessage(
                     successToast, 1000);
+                  $rootScope.$applyAsync();
                 });
               }, function() {
                 // Note to developers:
@@ -138,6 +139,7 @@ angular.module('oppia').directive('topicEditorNavbar', [
                 }
                 $scope.topicRights.markTopicAsPublished();
                 TopicEditorStateService.setTopicRights($scope.topicRights);
+                $rootScope.$applyAsync();
               }
             ).then(function() {
               var successToast = 'Topic published.';
@@ -199,10 +201,13 @@ angular.module('oppia').directive('topicEditorNavbar', [
               controller: 'TopicEditorSaveModalController'
             }).result.then(function(commitMessage) {
               TopicEditorStateService.saveTopic(commitMessage);
-            }, function() {}).then(function() {
               var successToast = 'Changes saved.';
               AlertsService.addSuccessMessage(
                 successToast, 1000);
+            }, function() {
+              // Note to developers:
+              // This callback is triggered when the Cancel button is clicked.
+              // No further action is needed.
             });
           };
 
@@ -215,6 +220,7 @@ angular.module('oppia').directive('topicEditorNavbar', [
               function() {
                 $scope.topicRights.markTopicAsUnpublished();
                 TopicEditorStateService.setTopicRights($scope.topicRights);
+                $rootScope.$applyAsync();
               });
           };
 
@@ -316,7 +322,7 @@ angular.module('oppia').directive('topicEditorNavbar', [
             $scope.prepublishValidationIssues = [];
             $scope.topicRights = TopicEditorStateService.getTopicRights();
             ctrl.directiveSubscriptions.add(
-              UndoRedoService.onUndoRedoChangeApplied().subscribe(
+              UndoRedoService.onUndoRedoChangeApplied$().subscribe(
                 () => _validateTopic()
               )
             );

@@ -28,7 +28,7 @@ angular.module('oppia', [
   'toastr', 'ui.bootstrap', 'ui.sortable', uiValidate
 ]);
 
-import { NgModule, StaticProvider } from '@angular/core';
+import { APP_INITIALIZER, NgModule, StaticProvider } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 import { downgradeComponent } from '@angular/upgrade/static';
 import { HttpClientModule } from '@angular/common/http';
@@ -39,16 +39,13 @@ import { OppiaAngularRootComponent } from
   'components/oppia-angular-root.component';
 import { CollectionFooterComponent } from
   'pages/collection-player-page/collection-footer/collection-footer.component';
+import { CollectionNavbarComponent } from
+  'pages/collection-player-page/collection-navbar/collection-navbar.component';
 import { CollectionNodeListComponent } from
 // eslint-disable-next-line max-len
   'pages/collection-player-page/collection-node-list/collection-node-list.component';
-
-
-import { AppConstants } from 'app.constants';
-import { InteractionsExtensionsConstants } from
-  'interactions/interactions-extension.constants';
-import { ObjectsDomainConstants } from
-  'domain/objects/objects-domain.constants';
+import { platformFeatureInitFactory, PlatformFeatureService } from
+  'services/platform-feature.service';
 
 @NgModule({
   imports: [
@@ -59,20 +56,25 @@ import { ObjectsDomainConstants } from
   declarations: [
     OppiaAngularRootComponent,
     CollectionFooterComponent,
+    CollectionNavbarComponent,
     CollectionNodeListComponent
   ],
   entryComponents: [
     OppiaAngularRootComponent,
     CollectionFooterComponent,
-    CollectionNodeListComponent
+    CollectionNodeListComponent,
+    CollectionNavbarComponent
   ],
   providers: [
-    AppConstants,
-    InteractionsExtensionsConstants,
-    ObjectsDomainConstants,
     {
       provide: HTTP_INTERCEPTORS,
       useClass: RequestInterceptor,
+      multi: true
+    },
+    {
+      provide: APP_INITIALIZER,
+      useFactory: platformFeatureInitFactory,
+      deps: [PlatformFeatureService],
       multi: true
     }
   ]

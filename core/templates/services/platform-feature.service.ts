@@ -35,24 +35,21 @@
 import { Injectable } from '@angular/core';
 import { downgradeInjectable } from '@angular/upgrade/static';
 
-import { isEqual } from 'lodash';
+import isEqual from 'lodash/isEqual';
 
-import { ClientContext, ClientContextObjectFactory } from
-  'domain/platform_feature/client-context-object.factory';
 import { PlatformFeatureBackendApiService } from
   'domain/platform_feature/platform-feature-backend-api.service';
 import {
   FeatureNames,
   FeatureStatusSummary,
-  FeatureStatusSummaryObjectFactory,
   FeatureStatusChecker
-} from 'domain/platform_feature/feature-status-summary-object.factory';
-import { I18nLanguageCodeService } from 'services/i18n-language-code.service';
+} from 'domain/platform_feature/feature-status-summary.model';
 import { LoggerService } from 'services/contextual/logger.service';
 import { UrlService } from 'services/contextual/url.service';
 import { WindowRef } from 'services/contextual/window-ref.service';
 import { BrowserCheckerService } from
   'domain/utilities/browser-checker.service';
+import { ClientContext } from 'domain/platform_feature/client-context.model';
 
 interface FeatureFlagsCacheItem {
   timestamp: number;
@@ -70,25 +67,16 @@ export class PlatformFeatureService {
   private static COOKIE_NAME_FOR_SESSION_ID = 'SACSID';
   private static COOKIE_NAME_FOR_SESSION_ID_IN_DEV = 'dev_appserver_login';
 
-  // TODO(#9154): Remove static when migration is complete.
+  // The following attributes are made static to avoid potential inconsistencies
+  // caused by multi-instantiation of the service.
   static featureStatusSummary: FeatureStatusSummary = null;
-
-  // TODO(#9154): Remove static when migration is complete.
+  static initializationPromise: Promise<void> = null;
   static _isInitializedWithError = false;
-
-  // TODO(#9154): Remove static when migration is complete.
   static _isSkipped = false;
 
-  // TODO(#9154): Remove static when migration is complete.
-  static initializationPromise: Promise<void> = null;
-
   constructor(
-      private clientContextObjectFactory: ClientContextObjectFactory,
       private platformFeatureBackendApiService:
         PlatformFeatureBackendApiService,
-      private featureStatusSummaryObjectFactory:
-        FeatureStatusSummaryObjectFactory,
-      private i18nLanguageCodeService: I18nLanguageCodeService,
       private windowRef: WindowRef,
       private loggerService: LoggerService,
       private urlService: UrlService,
@@ -170,8 +158,8 @@ export class PlatformFeatureService {
       // erased, leading to the 'Registration session expired' error.
       if (this.urlService.getPathname() === '/signup') {
         PlatformFeatureService._isSkipped = true;
-        PlatformFeatureService.featureStatusSummary = this
-          .featureStatusSummaryObjectFactory.createDefault();
+        PlatformFeatureService.featureStatusSummary =
+          FeatureStatusSummary.createDefault();
         return;
       }
 
@@ -183,8 +171,8 @@ export class PlatformFeatureService {
         'Error during initialization of PlatformFeatureService: ' +
         `${err.message ? err.message : err}`);
       // If any error, just disable all features.
-      PlatformFeatureService.featureStatusSummary = this
-        .featureStatusSummaryObjectFactory.createDefault();
+      PlatformFeatureService.featureStatusSummary =
+        FeatureStatusSummary.createDefault();
       PlatformFeatureService._isInitializedWithError = true;
       this.clearSavedResults();
     }
@@ -233,7 +221,7 @@ export class PlatformFeatureService {
         timestamp: savedObj.timestamp,
         sessionId: savedObj.sessionId,
         featureStatusSummary: (
-          this.featureStatusSummaryObjectFactory.createFromBackendDict(
+          FeatureStatusSummary.createFromBackendDict(
             savedObj.featureStatusSummary))
       };
     }
@@ -245,8 +233,8 @@ export class PlatformFeatureService {
    * all following conditions hold:
    *   - it hasn't expired.
    *   - its session id matches the current session id.
-   *   - there are new features defined in the code base while the cached
-   *     summary is out-of-date.
+   *   - there isn't any new feature defined in the code base that is not
+   *     presented in the cached result.
    *
    * @param {FeatureFlagsCacheItem} item - The result item loaded from
    * sessionStorage.
@@ -283,13 +271,10 @@ export class PlatformFeatureService {
    * client information.
    */
   private generateClientContext(): ClientContext {
-    const clientType = 'Web';
+    const platformType = 'Web';
     const browserType = this.browserCheckerService.detectBrowserType();
-    const userLocale = (
-      this.i18nLanguageCodeService.getCurrentI18nLanguageCode());
 
-    return this.clientContextObjectFactory.create(
-      clientType, browserType, userLocale);
+    return ClientContext.create(platformType, browserType);
   }
 
   /**
@@ -322,6 +307,10 @@ export class PlatformFeatureService {
     return Date.now();
   }
 }
+
+export const platformFeatureInitFactory = (service: PlatformFeatureService) => {
+  return (): Promise<void> => service.initialize();
+};
 
 angular.module('oppia').factory(
   'PlatformFeatureService', downgradeInjectable(PlatformFeatureService));

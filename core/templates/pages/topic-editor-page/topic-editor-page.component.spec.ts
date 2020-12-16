@@ -18,7 +18,7 @@
 
 // TODO(#7222): Remove the following block of unnnecessary imports once
 // App.ts is upgraded to Angular 8.
-import { UpgradedServices } from 'services/UpgradedServices';
+import { importAllAngularServices } from 'tests/unit-test-utils';
 // ^^^ This block is to be removed.
 
 require('pages/topic-editor-page/topic-editor-page.component.ts');
@@ -40,12 +40,7 @@ describe('Topic editor page', function() {
   var topic = null;
   var ShortSkillSummaryObjectFactory = null;
 
-  beforeEach(angular.mock.module('oppia', function($provide) {
-    var ugs = new UpgradedServices();
-    for (let [key, value] of Object.entries(ugs.getUpgradedServices())) {
-      $provide.value(key, value);
-    }
-  }));
+  importAllAngularServices();
 
   beforeEach(angular.mock.inject(function($injector, $componentController) {
     var $rootScope = $injector.get('$rootScope');
@@ -75,6 +70,7 @@ describe('Topic editor page', function() {
     topic._canonicalStoryReferences = [story1, story2];
     topic.setName('New Name');
     topic.setUrlFragment('topic-url-fragment');
+    topic.setPageTitleFragmentForWeb('topic page title');
     TopicEditorStateService.setTopic(topic);
     spyOn(TopicEditorStateService, 'getTopic').and.returnValue(topic);
     $scope = $rootScope.$new();
@@ -119,6 +115,15 @@ describe('Topic editor page', function() {
     expect(ctrl.isInPreviewTab()).toBe(false);
     expect(ctrl.isMainEditorTabSelected()).toBe(false);
     expect(ctrl.getNavbarText()).toBe('Question Editor');
+  });
+
+  it('should call confirm before leaving', function() {
+    spyOn(UndoRedoService, 'getChangeCount').and.returnValue(10);
+    spyOn(window, 'addEventListener');
+    ctrl.setUpBeforeUnload();
+    ctrl.confirmBeforeLeaving({returnValue: ''});
+    expect(window.addEventListener).toHaveBeenCalledWith(
+      'beforeunload', ctrl.confirmBeforeLeaving);
   });
 
   it('should return the change count', function() {

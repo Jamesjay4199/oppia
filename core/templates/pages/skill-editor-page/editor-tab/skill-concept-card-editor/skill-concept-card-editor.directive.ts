@@ -181,16 +181,24 @@ angular.module('oppia').directive('skillConceptCardEditor', [
                 skillWorkedExamples: () => skillWorkedExamples
               },
               controller: 'SkillPreviewModalController'
+            }).result.then(() => {}, () => {
+              // Note to developers:
+              // This callback is triggered when the Cancel button is clicked.
+              // No further action is needed.
             });
           };
 
           $scope.toggleWorkedExampleList = function() {
-            $scope.workedExamplesListIsShown = (
-              !$scope.workedExamplesListIsShown);
+            if (WindowDimensionsService.isWindowNarrow()) {
+              $scope.workedExamplesListIsShown = (
+                !$scope.workedExamplesListIsShown);
+            }
           };
 
           $scope.toggleSkillEditorCard = function() {
-            $scope.skillEditorCardIsShown = !$scope.skillEditorCardIsShown;
+            if (WindowDimensionsService.isWindowNarrow()) {
+              $scope.skillEditorCardIsShown = !$scope.skillEditorCardIsShown;
+            }
           };
 
           ctrl.$onInit = function() {

@@ -47,7 +47,7 @@ class CollectionMigrationOneOffJobTests(test_utils.GenericTestBase):
         # Setup user who will own the test collections.
         self.signup(self.ALBERT_EMAIL, self.ALBERT_NAME)
         self.albert_id = self.get_user_id_from_email(self.ALBERT_EMAIL)
-        self.process_and_flush_pending_tasks()
+        self.process_and_flush_pending_mapreduce_tasks()
 
     def test_migration_job_does_not_convert_up_to_date_collection(self):
         """Tests that the collection migration job does not convert an
@@ -68,7 +68,7 @@ class CollectionMigrationOneOffJobTests(test_utils.GenericTestBase):
         job_id = (
             collection_jobs_one_off.CollectionMigrationOneOffJob.create_new())
         collection_jobs_one_off.CollectionMigrationOneOffJob.enqueue(job_id)
-        self.process_and_flush_pending_tasks()
+        self.process_and_flush_pending_mapreduce_tasks()
 
         # Verify the collection is exactly the same after migration.
         updated_collection = (
@@ -97,8 +97,8 @@ class CollectionMigrationOneOffJobTests(test_utils.GenericTestBase):
 
         # Note: This creates a summary based on the upgraded model (which is
         # fine). A summary is needed to delete the collection.
-        collection_services.create_collection_summary(
-            self.COLLECTION_ID, None)
+        collection_services.regenerate_collection_and_contributors_summaries(
+            self.COLLECTION_ID)
 
         # Delete the exploration before migration occurs.
         collection_services.delete_collection(
@@ -115,7 +115,7 @@ class CollectionMigrationOneOffJobTests(test_utils.GenericTestBase):
 
         # This running without errors indicates the deleted collection is
         # being ignored.
-        self.process_and_flush_pending_tasks()
+        self.process_and_flush_pending_mapreduce_tasks()
 
         # Ensure the exploration is still deleted.
         with self.assertRaisesRegexp(Exception, 'Entity .* not found'):
@@ -154,9 +154,8 @@ class CollectionMigrationOneOffJobTests(test_utils.GenericTestBase):
         # Save a collection summary object for indexing. The explicit commit
         # does not create a summary object, which is needed for the
         # job to update the index after updating the collection.
-        collection_summary = collection_services.compute_summary_of_collection(
-            model, self.albert_id)
-        collection_services.save_collection_summary(collection_summary)
+        collection_services.regenerate_collection_summary_with_new_contributor(
+            model.id, self.albert_id)
 
         # Start migration job on sample collection.
         job_id = (
@@ -164,7 +163,7 @@ class CollectionMigrationOneOffJobTests(test_utils.GenericTestBase):
         collection_jobs_one_off.CollectionMigrationOneOffJob.enqueue(job_id)
 
         # This running without errors indicates the collection is migrated.
-        self.process_and_flush_pending_tasks()
+        self.process_and_flush_pending_mapreduce_tasks()
 
         # Check the version number of the new model.
         new_model = collection_models.CollectionModel.get(self.COLLECTION_ID)
@@ -205,7 +204,7 @@ class CollectionMigrationOneOffJobTests(test_utils.GenericTestBase):
 
         # This running without errors indicates the collection failing
         # validation is being ignored.
-        self.process_and_flush_pending_tasks()
+        self.process_and_flush_pending_mapreduce_tasks()
 
         # Check that the version number of the new model is same as old model.
         new_model = collection_models.CollectionModel.get(self.COLLECTION_ID)
@@ -257,9 +256,8 @@ class CollectionMigrationOneOffJobTests(test_utils.GenericTestBase):
         # Save a collection summary object for indexing. The explicit commit
         # does not create a summary object, which is needed for the
         # job to update the index after updating the collection.
-        collection_summary = collection_services.compute_summary_of_collection(
-            model, self.albert_id)
-        collection_services.save_collection_summary(collection_summary)
+        collection_services.regenerate_collection_summary_with_new_contributor(
+            model.id, self.albert_id)
 
         # Check that collection_contents is empty.
         self.assertEqual(model.collection_contents, {})
@@ -268,7 +266,7 @@ class CollectionMigrationOneOffJobTests(test_utils.GenericTestBase):
         job_id = (
             collection_jobs_one_off.CollectionMigrationOneOffJob.create_new())
         collection_jobs_one_off.CollectionMigrationOneOffJob.enqueue(job_id)
-        self.process_and_flush_pending_tasks()
+        self.process_and_flush_pending_mapreduce_tasks()
 
         new_model = collection_models.CollectionModel.get(self.COLLECTION_ID)
         self.assertEqual(

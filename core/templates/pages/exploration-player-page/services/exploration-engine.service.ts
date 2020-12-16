@@ -18,9 +18,6 @@
 
 import { EventEmitter } from '@angular/core';
 
-import { OppiaAngularRootComponent } from
-  'components/oppia-angular-root.component';
-
 require('domain/collection/guest-collection-progress.service.ts');
 require('domain/exploration/editable-exploration-backend-api.service.ts');
 require('domain/exploration/ExplorationObjectFactory.ts');
@@ -60,7 +57,7 @@ require('pages/interaction-specs.constants.ajs.ts');
 // implemented differently depending on whether the skin is being played
 // in the learner view, or whether it is being previewed in the editor view.
 angular.module('oppia').factory('ExplorationEngineService', [
-  'AlertsService', 'AnswerClassificationService',
+  '$rootScope', 'AlertsService', 'AnswerClassificationService',
   'AudioPreloaderService', 'AudioTranslationLanguageService', 'ContextService',
   'ExplorationFeaturesBackendApiService', 'ExplorationHtmlFormatterService',
   'ExplorationObjectFactory', 'ExpressionInterpolationService',
@@ -68,15 +65,13 @@ angular.module('oppia').factory('ExplorationEngineService', [
   'PlayerTranscriptService', 'ReadOnlyExplorationBackendApiService',
   'StateCardObjectFactory', 'StatsReportingService', 'UrlService',
   function(
-      AlertsService, AnswerClassificationService,
+      $rootScope, AlertsService, AnswerClassificationService,
       AudioPreloaderService, AudioTranslationLanguageService, ContextService,
       ExplorationFeaturesBackendApiService, ExplorationHtmlFormatterService,
       ExplorationObjectFactory, ExpressionInterpolationService,
       FocusManagerService, ImagePreloaderService, LearnerParamsService,
       PlayerTranscriptService, ReadOnlyExplorationBackendApiService,
       StateCardObjectFactory, StatsReportingService, UrlService) {
-    StatsReportingService = (
-      OppiaAngularRootComponent.statsReportingService);
     var _explorationId = ContextService.getExplorationId();
     var _editorPreviewMode = ContextService.isInExplorationEditorPage();
     var _questionPlayerMode = ContextService.isInQuestionPlayerMode();
@@ -102,6 +97,7 @@ angular.module('oppia').factory('ExplorationEngineService', [
         .loadExploration(_explorationId, version)
         .then(function(exploration) {
           version = exploration.version;
+          $rootScope.$applyAsync();
         });
     }
 

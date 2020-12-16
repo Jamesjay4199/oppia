@@ -15,11 +15,15 @@
 /**
  * @fileoverview Unit tests for TrainingDataEditorPanelServiceModalController.
  */
+
 // TODO(#7222): Remove the following block of unnnecessary imports once
 // the code corresponding to the spec is upgraded to Angular 8.
 import { UpgradedServices } from 'services/UpgradedServices';
+import { importAllAngularServices } from 'tests/unit-test-utils';
 
 describe('TrainingDataEditorPanelServiceModalController', function() {
+  importAllAngularServices();
+
   var $scope = null;
   var $uibModalInstance = null;
   var ExplorationStatesService = null;
@@ -230,7 +234,7 @@ describe('TrainingDataEditorPanelServiceModalController', function() {
         'The answer Answer1 has been successfully trained.', 1000);
     });
 
-    it('open train unresolved answer modal', function() {
+    it('should open train unresolved answer modal', function() {
       var addSuccessMessageSpy = spyOn(AlertsService, 'addSuccessMessage')
         .and.callThrough();
       spyOn(TrainingModalService, 'openTrainUnresolvedAnswerModal').and
@@ -366,7 +370,7 @@ describe('TrainingDataEditorPanelServiceModalController', function() {
         });
     }));
 
-    it('open train unresolved answer modal', function() {
+    it('should open train unresolved answer modal', function() {
       var addSuccessMessageSpy = spyOn(AlertsService, 'addSuccessMessage')
         .and.callThrough();
       spyOn(TrainingModalService, 'openTrainUnresolvedAnswerModal').and
@@ -494,7 +498,7 @@ describe('TrainingDataEditorPanelServiceModalController', function() {
         });
     }));
 
-    it('open train unresolved answer modal', function() {
+    it('should open train unresolved answer modal', function() {
       var openTrainUnresolvedAnswerModalSpy = spyOn(
         TrainingModalService, 'openTrainUnresolvedAnswerModal').and
         .callThrough();

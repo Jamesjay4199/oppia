@@ -54,6 +54,7 @@ import argparse
 import fnmatch
 import multiprocessing
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -66,6 +67,7 @@ from . import css_linter
 from . import general_purpose_linter
 from . import html_linter
 from . import js_ts_linter
+from . import linter_utils
 from . import other_files_linter
 from . import python_linter
 from .. import common
@@ -100,8 +102,6 @@ _PARENT_DIR = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
 _PATHS_TO_INSERT = [
     os.getcwd(),
     os.path.join(
-        common.GOOGLE_APP_ENGINE_SDK_HOME, 'lib', 'webapp2-2.3'),
-    os.path.join(
         common.GOOGLE_APP_ENGINE_SDK_HOME, 'lib', 'yaml-3.10'),
     os.path.join(
         common.GOOGLE_APP_ENGINE_SDK_HOME, 'lib', 'jinja2-2.6'),
@@ -112,28 +112,22 @@ _PATHS_TO_INSERT = [
     os.path.join(
         _PARENT_DIR, 'oppia_tools', 'PyGithub-%s' % common.PYGITHUB_VERSION),
     os.path.join(
+        _PARENT_DIR, 'oppia_tools',
+        'setuptools-%s' % common.SETUPTOOLS_VERSION),
+    os.path.join(
         _PARENT_DIR, 'oppia_tools', 'Pillow-%s' % common.PILLOW_VERSION),
     os.path.join(
+        _PARENT_DIR, 'oppia_tools', 'protobuf-%s' % common.PROTOBUF_VERSION),
+    os.path.join(
         _PARENT_DIR, 'oppia_tools', 'psutil-%s' % common.PSUTIL_VERSION),
-    os.path.join('third_party', 'backports.functools_lru_cache-1.6.1'),
-    os.path.join('third_party', 'beautifulsoup4-4.9.1'),
-    os.path.join('third_party', 'bleach-3.1.5'),
-    os.path.join('third_party', 'callbacks-0.3.0'),
-    os.path.join('third_party', 'future-0.17.1'),
-    os.path.join('third_party', 'gae-cloud-storage-1.9.22.1'),
-    os.path.join('third_party', 'gae-mapreduce-1.9.22.0'),
-    os.path.join('third_party', 'gae-pipeline-1.9.22.1'),
-    os.path.join('third_party', 'graphy-1.0.0'),
-    os.path.join('third_party', 'html5lib-python-1.1'),
-    os.path.join('third_party', 'mutagen-1.43.0'),
-    os.path.join('third_party', 'packaging-20.4'),
-    os.path.join('third_party', 'simplejson-3.17.0'),
-    os.path.join('third_party', 'pylatexenc-2.6'),
-    os.path.join('third_party', 'redis-3.5.3'),
-    os.path.join('third_party', 'soupsieve-1.9.5'),
-    os.path.join('third_party', 'six-1.15.0'),
-    os.path.join('third_party', 'webencodings-0.5.1'),
+    os.path.join(
+        _PARENT_DIR, 'oppia_tools', 'pip-tools-%s' % common.PIP_TOOLS_VERSION),
+    os.path.join(
+        _PARENT_DIR, 'oppia_tools',
+        'simple-crypt-%s' % common.SIMPLE_CRYPT_VERSION),
+    common.THIRD_PARTY_PYTHON_LIBS_DIR
 ]
+
 for path in _PATHS_TO_INSERT:
     sys.path.insert(0, path)
 
@@ -381,8 +375,11 @@ def _get_all_filepaths(input_path, input_filenames):
         all_filepaths = _get_changed_filepaths()
     all_filepaths = [
         filename for filename in all_filepaths if not
-        any(fnmatch.fnmatch(filename, pattern) for pattern in(
-            general_purpose_linter.EXCLUDED_PATHS))]
+        any(
+            fnmatch.fnmatch(filename, pattern) for pattern
+            in general_purpose_linter.EXCLUDED_PATHS
+        )
+    ]
     return all_filepaths
 
 
@@ -421,10 +418,12 @@ def _print_summary_of_error_messages(lint_messages):
         lint_messages: list(str). List of linter error messages.
     """
     if lint_messages != '':
-        python_utils.PRINT('Please fix the errors below:')
-        python_utils.PRINT('----------------------------------------')
-        for message in lint_messages:
-            python_utils.PRINT(message)
+        error_message_lines = [
+            '----------------------------------------',
+            'Please fix the errors below:',
+            '----------------------------------------',
+            ] + lint_messages
+        linter_utils.print_failure_message('\n'.join(error_message_lines))
 
 
 def _get_task_output(lint_messages, failed, task):
@@ -468,6 +467,20 @@ def _print_errors_stacktrace(errors_stacktrace):
         ' above errors gets fixed')
 
 
+def _get_space_separated_linter_name(linter_name):
+    """Returns the space separated name of the linter class.
+
+    Args:
+        linter_name: str. Name of the linter class.
+
+    Returns:
+        str. Space separated name of the linter class.
+    """
+    return re.sub(
+        r'((?<=[a-z])[A-Z]|(?<!\A)[A-Z](?=[a-z]))',
+        r' \1', linter_name)
+
+
 def main(args=None):
     """Main method for pre commit linter script that lints Python, JavaScript,
     HTML, and CSS files.
@@ -482,6 +495,7 @@ def main(args=None):
     all_filepaths = _get_all_filepaths(parsed_args.path, parsed_args.files)
 
     install_third_party_libs.main()
+    common.fix_third_party_imports()
 
     python_utils.PRINT('Starting Linter....')
 
@@ -509,6 +523,12 @@ def main(args=None):
     custom_linters = []
     third_party_linters = []
     for file_extension_type in file_extension_types:
+        if (file_extension_type == 'js' or file_extension_type == 'ts'):
+            if len(_FILES['.js'] + _FILES['.ts']) == 0:
+                continue
+        elif (not file_extension_type == 'other' and not
+              len(_FILES['.%s' % file_extension_type])):
+            continue
         custom_linter, third_party_linter = _get_linters_for_file_extension(
             file_extension_type)
         custom_linters += custom_linter
@@ -519,15 +539,17 @@ def main(args=None):
     tasks_third_party = []
 
     for linter in custom_linters:
+        name = _get_space_separated_linter_name(type(linter).__name__)
         task_custom = concurrent_task_utils.create_task(
             linter.perform_all_lint_checks, verbose_mode_enabled,
-            custom_semaphore, name='custom')
+            custom_semaphore, name=name)
         tasks_custom.append(task_custom)
 
     for linter in third_party_linters:
+        name = _get_space_separated_linter_name(type(linter).__name__)
         task_third_party = concurrent_task_utils.create_task(
             linter.perform_all_lint_checks, verbose_mode_enabled,
-            third_party_semaphore, name='third_party')
+            third_party_semaphore, name=name)
         tasks_third_party.append(task_third_party)
 
     # Execute tasks.
@@ -555,18 +577,21 @@ def main(args=None):
 
     errors_stacktrace = concurrent_task_utils.ALL_ERRORS
     if errors_stacktrace:
+        failed = True
         _print_errors_stacktrace(errors_stacktrace)
 
     if failed:
         _print_summary_of_error_messages(lint_messages)
-        python_utils.PRINT('---------------------------')
-        python_utils.PRINT('Checks Not Passed.')
-        python_utils.PRINT('---------------------------')
+        linter_utils.print_failure_message('\n'.join([
+            '---------------------------',
+            'Checks Not Passed.',
+            '---------------------------']))
         sys.exit(1)
     else:
-        python_utils.PRINT('---------------------------')
-        python_utils.PRINT('All Checks Passed.')
-        python_utils.PRINT('---------------------------')
+        linter_utils.print_success_message('\n'.join([
+            '---------------------------',
+            'All Checks Passed.',
+            '---------------------------']))
 
 
 NAME_SPACE = multiprocessing.Manager().Namespace()

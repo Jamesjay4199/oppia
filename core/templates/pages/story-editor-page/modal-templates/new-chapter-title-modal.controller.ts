@@ -24,7 +24,7 @@ require('domain/story/story-update.service.ts');
 require('pages/story-editor-page/services/story-editor-state.service.ts');
 require('domain/exploration/exploration-id-validation.service.ts');
 
-const newChapterConstants = require('constants.ts');
+import newChapterConstants from 'assets/constants';
 
 angular.module('oppia').controller('CreateNewChapterModalController', [
   '$controller', '$scope', '$uibModalInstance',
@@ -78,7 +78,7 @@ angular.module('oppia').controller('CreateNewChapterModalController', [
 
     $scope.cancel = function() {
       StoryUpdateService.deleteStoryNode($scope.story, $scope.nodeId);
-      $uibModalInstance.close();
+      $uibModalInstance.dismiss();
     };
 
     $scope.updateExplorationId = function() {

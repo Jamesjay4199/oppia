@@ -24,10 +24,10 @@ import feconf
 import python_utils
 import utils
 
-from google.appengine.ext import ndb
-
 (base_models, user_models) = models.Registry.import_models([
     models.NAMES.base_model, models.NAMES.user])
+
+datastore_services = models.Registry.import_datastore_services()
 
 # Allowed feedback thread statuses.
 STATUS_CHOICES_OPEN = 'open'
@@ -55,47 +55,85 @@ class GeneralFeedbackThreadModel(base_models.BaseModel):
         [entity_type].[entity_id].[generated_string]
     """
 
+    # We use the model id as a key in the Takeout dict.
+    ID_IS_USED_AS_TAKEOUT_KEY = True
+
     # The type of entity the thread is linked to.
-    entity_type = ndb.StringProperty(required=True, indexed=True)
+    entity_type = datastore_services.StringProperty(required=True, indexed=True)
     # The ID of the entity the thread is linked to.
-    entity_id = ndb.StringProperty(required=True, indexed=True)
+    entity_id = datastore_services.StringProperty(required=True, indexed=True)
     # ID of the user who started the thread. This may be None if the feedback
     # was given anonymously by a learner.
-    original_author_id = ndb.StringProperty(indexed=True)
+    original_author_id = datastore_services.StringProperty(indexed=True)
     # Latest status of the thread.
-    status = ndb.StringProperty(
+    status = datastore_services.StringProperty(
         default=STATUS_CHOICES_OPEN,
         choices=STATUS_CHOICES,
         required=True,
         indexed=True,
     )
     # Latest subject of the thread.
-    subject = ndb.StringProperty(indexed=True, required=True)
+    subject = datastore_services.StringProperty(indexed=True, required=True)
     # Summary text of the thread.
-    summary = ndb.TextProperty(indexed=False)
+    summary = datastore_services.TextProperty(indexed=False)
     # Specifies whether this thread has a related suggestion.
-    has_suggestion = (
-        ndb.BooleanProperty(indexed=True, default=False, required=True))
+    has_suggestion = datastore_services.BooleanProperty(
+        indexed=True, default=False, required=True)
 
     # Cached value of the number of messages in the thread.
-    message_count = ndb.IntegerProperty(indexed=True, default=0)
+    message_count = datastore_services.IntegerProperty(indexed=True, default=0)
     # Cached text of the last message in the thread with non-empty content, or
     # None if there is no such message.
-    last_nonempty_message_text = ndb.TextProperty(indexed=False)
+    last_nonempty_message_text = datastore_services.TextProperty(indexed=False)
     # Cached ID for the user of the last message in the thread with non-empty
     # content, or None if the message was made anonymously or if there is no
     # such message.
-    last_nonempty_message_author_id = ndb.StringProperty(indexed=True)
+    last_nonempty_message_author_id = (
+        datastore_services.StringProperty(indexed=True))
 
     @staticmethod
     def get_deletion_policy():
-        """General feedback thread needs to be pseudonymized for the user."""
+        """Model contains data to pseudonymize corresponding to a user:
+        original_author_id and last_nonempty_message_author_id fields.
+        """
         return base_models.DELETION_POLICY.LOCALLY_PSEUDONYMIZE
 
     @staticmethod
-    def get_export_policy():
-        """Model contains user data."""
-        return base_models.EXPORT_POLICY.CONTAINS_USER_DATA
+    def get_model_association_to_user():
+        """Model is exported as multiple instances per user since there
+        are multiple feedback threads relevant to a particular user.
+        """
+        return base_models.MODEL_ASSOCIATION_TO_USER.MULTIPLE_INSTANCES_PER_USER
+
+    @classmethod
+    def get_export_policy(cls):
+        """Model contains data to export corresponding to a user."""
+        return dict(super(cls, cls).get_export_policy(), **{
+            'entity_type': base_models.EXPORT_POLICY.EXPORTED,
+            'entity_id': base_models.EXPORT_POLICY.EXPORTED,
+            # We do not export the original_author_id because we should not
+            # export internal user ids.
+            'original_author_id': base_models.EXPORT_POLICY.NOT_APPLICABLE,
+            'status': base_models.EXPORT_POLICY.EXPORTED,
+            'subject': base_models.EXPORT_POLICY.EXPORTED,
+            'summary': base_models.EXPORT_POLICY.EXPORTED,
+            'has_suggestion': base_models.EXPORT_POLICY.EXPORTED,
+            'message_count': base_models.EXPORT_POLICY.EXPORTED,
+            'last_nonempty_message_text':
+                base_models.EXPORT_POLICY.NOT_APPLICABLE,
+            'last_nonempty_message_author_id':
+                base_models.EXPORT_POLICY.NOT_APPLICABLE,
+            'last_updated': base_models.EXPORT_POLICY.EXPORTED
+        })
+
+    @classmethod
+    def get_field_names_for_takeout(cls):
+        """Indicates that the last_updated variable is exported under the
+        name "last_updated_msec" in Takeout.
+        """
+        return dict(super(cls, cls).get_field_names_for_takeout(), ** {
+            'last_updated': 'last_updated_msec'
+        })
 
     @classmethod
     def has_reference_to_user_id(cls, user_id):
@@ -107,7 +145,7 @@ class GeneralFeedbackThreadModel(base_models.BaseModel):
         Returns:
             bool. Whether any models refer to the given user ID.
         """
-        return cls.query(ndb.OR(
+        return cls.query(datastore_services.any_of(
             cls.original_author_id == user_id,
             cls.last_nonempty_message_author_id == user_id
         )).get(keys_only=True) is not None
@@ -215,36 +253,59 @@ class GeneralFeedbackMessageModel(base_models.BaseModel):
     The id of instances of this class has the form [thread_id].[message_id]
     """
 
+    # We use the model id as a key in the Takeout dict.
+    ID_IS_USED_AS_TAKEOUT_KEY = True
+
     # ID corresponding to an entry of FeedbackThreadModel.
-    thread_id = ndb.StringProperty(required=True, indexed=True)
+    thread_id = datastore_services.StringProperty(required=True, indexed=True)
     # 0-based sequential numerical ID. Sorting by this field will create the
     # thread in chronological order.
-    message_id = ndb.IntegerProperty(required=True, indexed=True)
+    message_id = datastore_services.IntegerProperty(required=True, indexed=True)
     # ID of the user who posted this message. This may be None if the feedback
     # was given anonymously by a learner.
-    author_id = ndb.StringProperty(indexed=True)
+    author_id = datastore_services.StringProperty(indexed=True)
     # New thread status. Must exist in the first message of a thread. For the
     # rest of the thread, should exist only when the status changes.
-    updated_status = ndb.StringProperty(choices=STATUS_CHOICES, indexed=True)
+    updated_status = (
+        datastore_services.StringProperty(choices=STATUS_CHOICES, indexed=True))
     # New thread subject. Must exist in the first message of a thread. For the
     # rest of the thread, should exist only when the subject changes.
-    updated_subject = ndb.StringProperty(indexed=False)
+    updated_subject = datastore_services.StringProperty(indexed=True)
     # Message text. Allowed not to exist (e.g. post only to update the status).
-    text = ndb.TextProperty(indexed=False)
+    text = datastore_services.TextProperty(indexed=False)
     # Whether the incoming message is received by email (as opposed to via
     # the web).
-    received_via_email = (
-        ndb.BooleanProperty(default=False, indexed=True, required=True))
+    received_via_email = datastore_services.BooleanProperty(
+        default=False, indexed=True, required=True)
 
     @staticmethod
     def get_deletion_policy():
-        """General feedback message needs to be pseudonymized for the user."""
+        """Model contains data to pseudonymize corresponding to a user:
+        author_id field.
+        """
         return base_models.DELETION_POLICY.LOCALLY_PSEUDONYMIZE
 
     @staticmethod
-    def get_export_policy():
-        """Model contains user data."""
-        return base_models.EXPORT_POLICY.CONTAINS_USER_DATA
+    def get_model_association_to_user():
+        """Model is exported as multiple instances per user since there are
+        multiple feedback messages relevant to a user.
+        """
+        return base_models.MODEL_ASSOCIATION_TO_USER.MULTIPLE_INSTANCES_PER_USER
+
+    @classmethod
+    def get_export_policy(cls):
+        """Model contains data to export corresponding to a user."""
+        return dict(super(cls, cls).get_export_policy(), **{
+            'thread_id': base_models.EXPORT_POLICY.EXPORTED,
+            'message_id': base_models.EXPORT_POLICY.EXPORTED,
+            # We do not export the author_id because we should not export
+            # internal user ids.
+            'author_id': base_models.EXPORT_POLICY.NOT_APPLICABLE,
+            'updated_status': base_models.EXPORT_POLICY.EXPORTED,
+            'updated_subject': base_models.EXPORT_POLICY.EXPORTED,
+            'text': base_models.EXPORT_POLICY.EXPORTED,
+            'received_via_email': base_models.EXPORT_POLICY.EXPORTED
+        })
 
     @classmethod
     def has_reference_to_user_id(cls, user_id):
@@ -256,8 +317,9 @@ class GeneralFeedbackMessageModel(base_models.BaseModel):
         Returns:
             bool. Whether any models refer to the given user ID.
         """
-        return cls.query(cls.author_id == user_id).get(
-            keys_only=True) is not None
+        return cls.query(
+            cls.author_id == user_id
+        ).get(keys_only=True) is not None
 
     @classmethod
     def export_data(cls, user_id):
@@ -504,21 +566,45 @@ class GeneralFeedbackThreadUserModel(base_models.BaseModel):
     Instances of this class have keys of the form [user_id].[thread_id]
     """
 
-    user_id = ndb.StringProperty(required=True, indexed=True)
-    thread_id = ndb.StringProperty(required=True, indexed=True)
-    message_ids_read_by_user = ndb.IntegerProperty(repeated=True, indexed=True)
+    user_id = datastore_services.StringProperty(required=True, indexed=True)
+    thread_id = datastore_services.StringProperty(required=True, indexed=True)
+    message_ids_read_by_user = (
+        datastore_services.IntegerProperty(repeated=True, indexed=True))
 
     @staticmethod
     def get_deletion_policy():
-        """General feedback thread user can be deleted since it only contains
-        information relevant to the one user.
+        """Model contains data to delete corresponding to a user:
+        user_id field.
         """
         return base_models.DELETION_POLICY.DELETE
 
     @staticmethod
-    def get_export_policy():
-        """Model contains user data."""
-        return base_models.EXPORT_POLICY.CONTAINS_USER_DATA
+    def get_model_association_to_user():
+        """Model is exported as multiple instances per user since there are
+        multiple feedback threads relevant to a user.
+        """
+        return base_models.MODEL_ASSOCIATION_TO_USER.MULTIPLE_INSTANCES_PER_USER
+
+    @classmethod
+    def get_export_policy(cls):
+        """Model contains data to export corresponding to a user."""
+        return dict(super(cls, cls).get_export_policy(), **{
+            'user_id': base_models.EXPORT_POLICY.NOT_APPLICABLE,
+            'thread_id':
+                base_models.EXPORT_POLICY.EXPORTED_AS_KEY_FOR_TAKEOUT_DICT,
+            'message_ids_read_by_user':
+                base_models.EXPORT_POLICY.EXPORTED
+        })
+
+    @classmethod
+    def apply_deletion_policy(cls, user_id):
+        """Delete instance of GeneralFeedbackThreadUserModel for the user.
+
+        Args:
+            user_id: str. The ID of the user whose data should be deleted.
+        """
+        datastore_services.delete_multi(
+            cls.query(cls.user_id == user_id).fetch(keys_only=True))
 
     @classmethod
     def has_reference_to_user_id(cls, user_id):
@@ -598,6 +684,7 @@ class GeneralFeedbackThreadUserModel(base_models.BaseModel):
                 id=instance_id, user_id=user_id, thread_id=thread_id)
             new_instances.append(new_instance)
 
+        GeneralFeedbackThreadUserModel.update_timestamps_multi(new_instances)
         GeneralFeedbackThreadUserModel.put_multi(new_instances)
         return new_instances
 
@@ -636,8 +723,9 @@ class GeneralFeedbackThreadUserModel(base_models.BaseModel):
         found_models = cls.get_all().filter(cls.user_id == user_id)
         user_data = {}
         for user_model in found_models:
-            user_data[user_model.thread_id] = (
-                user_model.message_ids_read_by_user)
+            user_data[user_model.thread_id] = {
+                'message_ids_read_by_user': user_model.message_ids_read_by_user
+            }
         return user_data
 
 
@@ -648,34 +736,29 @@ class FeedbackAnalyticsModel(base_models.BaseMapReduceBatchResultsModel):
     """
 
     # The number of open feedback threads for this exploration.
-    num_open_threads = ndb.IntegerProperty(default=None, indexed=True)
+    num_open_threads = (
+        datastore_services.IntegerProperty(default=None, indexed=True))
     # Total number of feedback threads for this exploration.
-    num_total_threads = ndb.IntegerProperty(default=None, indexed=True)
+    num_total_threads = (
+        datastore_services.IntegerProperty(default=None, indexed=True))
 
     @staticmethod
     def get_deletion_policy():
-        """Feedback analytic model should be kept if the associated exploration
-        is public.
-        """
-        return base_models.DELETION_POLICY.KEEP_IF_PUBLIC
+        """Model doesn't contain any data directly corresponding to a user."""
+        return base_models.DELETION_POLICY.NOT_APPLICABLE
 
     @staticmethod
-    def get_export_policy():
+    def get_model_association_to_user():
         """Model does not contain user data."""
-        return base_models.EXPORT_POLICY.NOT_APPLICABLE
+        return base_models.MODEL_ASSOCIATION_TO_USER.NOT_CORRESPONDING_TO_USER
 
     @classmethod
-    def has_reference_to_user_id(cls, unused_user_id):
-        """FeedbackAnalyticsModel doesn't reference any user_id directly.
-
-        Args:
-            unused_user_id: str. The (unused) ID of the user whose data
-                should be checked.
-
-        Returns:
-            bool. Whether any models refer to the given user ID.
-        """
-        return False
+    def get_export_policy(cls):
+        """Model doesn't contain any data directly corresponding to a user."""
+        return dict(super(cls, cls).get_export_policy(), **{
+            'num_open_threads': base_models.EXPORT_POLICY.NOT_APPLICABLE,
+            'num_total_threads': base_models.EXPORT_POLICY.NOT_APPLICABLE
+        })
 
     @classmethod
     def create(cls, model_id, num_open_threads, num_total_threads):
@@ -712,20 +795,32 @@ class UnsentFeedbackEmailModel(base_models.BaseModel):
     # Each element in this list is a dict with keys 'entity_type', 'entity_id',
     # 'thread_id' and 'message_id'; this information is used to retrieve
     # corresponding FeedbackMessageModel instance.
-    feedback_message_references = ndb.JsonProperty(repeated=True)
+    feedback_message_references = datastore_services.JsonProperty(repeated=True)
     # The number of failed attempts that have been made (so far) to
     # send an email to this user.
-    retries = ndb.IntegerProperty(default=0, required=True, indexed=True)
+    retries = datastore_services.IntegerProperty(
+        default=0, required=True, indexed=True)
 
     @staticmethod
     def get_deletion_policy():
-        """Unsent feedback email is kept until sent."""
+        """Model contains data corresponding to a user: id field but it isn't
+        deleted because it is needed for auditing purposes.
+        """
         return base_models.DELETION_POLICY.KEEP
 
     @staticmethod
-    def get_export_policy():
+    def get_model_association_to_user():
         """Model does not contain user data."""
-        return base_models.EXPORT_POLICY.NOT_APPLICABLE
+        return base_models.MODEL_ASSOCIATION_TO_USER.NOT_CORRESPONDING_TO_USER
+
+    @classmethod
+    def get_export_policy(cls):
+        """Model doesn't contain any data directly corresponding to a user."""
+        return dict(super(cls, cls).get_export_policy(), **{
+            'feedback_message_references':
+                base_models.EXPORT_POLICY.NOT_APPLICABLE,
+            'retries': base_models.EXPORT_POLICY.NOT_APPLICABLE
+        })
 
     @classmethod
     def has_reference_to_user_id(cls, user_id):

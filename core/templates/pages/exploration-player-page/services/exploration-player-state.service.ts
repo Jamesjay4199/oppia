@@ -19,9 +19,6 @@
 
 import { EventEmitter } from '@angular/core';
 
-import { OppiaAngularRootComponent } from
-  'components/oppia-angular-root.component';
-
 require('domain/exploration/editable-exploration-backend-api.service.ts');
 require('domain/exploration/read-only-exploration-backend-api.service.ts');
 require('domain/question/pretest-question-backend-api.service.ts');
@@ -45,27 +42,23 @@ require(
   'pages/exploration-player-page/exploration-player-page.constants.ajs.ts');
 
 angular.module('oppia').factory('ExplorationPlayerStateService', [
-  '$q', 'ContextService', 'EditableExplorationBackendApiService',
+  '$q', '$rootScope', 'ContextService', 'EditableExplorationBackendApiService',
   'ExplorationEngineService', 'ExplorationFeaturesBackendApiService',
   'ExplorationFeaturesService', 'NumberAttemptsService',
   'PlayerCorrectnessFeedbackEnabledService', 'PlayerTranscriptService',
   'PlaythroughService', 'PretestQuestionBackendApiService',
   'QuestionBackendApiService', 'QuestionPlayerEngineService',
-  'ReadOnlyExplorationBackendApiService', 'StateClassifierMappingService',
-  'StatsReportingService', 'UrlService',
+  'ReadOnlyExplorationBackendApiService', 'StatsReportingService', 'UrlService',
   'EXPLORATION_MODE',
   function(
-      $q, ContextService, EditableExplorationBackendApiService,
+      $q, $rootScope, ContextService, EditableExplorationBackendApiService,
       ExplorationEngineService, ExplorationFeaturesBackendApiService,
       ExplorationFeaturesService, NumberAttemptsService,
       PlayerCorrectnessFeedbackEnabledService, PlayerTranscriptService,
       PlaythroughService, PretestQuestionBackendApiService,
       QuestionBackendApiService, QuestionPlayerEngineService,
-      ReadOnlyExplorationBackendApiService, StateClassifierMappingService,
-      StatsReportingService, UrlService,
+      ReadOnlyExplorationBackendApiService, StatsReportingService, UrlService,
       EXPLORATION_MODE) {
-    StatsReportingService = (
-      OppiaAngularRootComponent.statsReportingService);
     var _totalQuestionsReceivedEventEmitter = new EventEmitter();
     var _oppiaFeedbackAvailableEventEmitter = new EventEmitter();
     var currentEngineService = null;
@@ -79,6 +72,7 @@ angular.module('oppia').factory('ExplorationPlayerStateService', [
         .loadExploration(explorationId, version)
         .then(function(exploration) {
           version = exploration.version;
+          $rootScope.$applyAsync();
         });
     }
 
@@ -88,7 +82,6 @@ angular.module('oppia').factory('ExplorationPlayerStateService', [
 
     var initializeExplorationServices = function(
         returnDict, arePretestsAvailable, callback) {
-      StateClassifierMappingService.init(returnDict.state_classifier_mapping);
       // For some cases, version is set only after
       // ReadOnlyExplorationBackendApiService.loadExploration() has completed.
       // Use returnDict.version for non-null version value.

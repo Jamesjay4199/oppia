@@ -26,6 +26,7 @@ require(
   'state-translation-editor.component.ts'
 );
 
+require('components/ck-editor-helpers/ck-editor-copy-content-service.ts');
 require('domain/utilities/url-interpolation.service.ts');
 require('filters/format-rte-preview.filter.ts');
 require('filters/string-utility-filters/convert-to-plain-text.filter.ts');
@@ -96,8 +97,9 @@ angular.module('oppia').component('stateTranslation', {
     ) {
       var ctrl = this;
       ctrl.directiveSubscriptions = new Subscription();
-      $scope.isVoiceoverModeActive = (
-        TranslationTabActiveModeService.isVoiceoverModeActive);
+      $scope.isVoiceoverModeActive = function() {
+        return (TranslationTabActiveModeService.isVoiceoverModeActive());
+      };
       var isTranslatedTextRequired = function() {
         return (
           TranslationTabActiveModeService.isVoiceoverModeActive() &&
@@ -462,10 +464,11 @@ angular.module('oppia').component('stateTranslation', {
         $scope.answerChoices = StateEditorService.getAnswerChoices(
           $scope.stateInteractionId, currentCustomizationArgs);
         $scope.interactionPreviewHtml = (
-          ExplorationHtmlFormatterService.getInteractionHtml(
-            $scope.stateInteractionId,
-            $scope.stateInteractionCustomizationArgs, false)
-        );
+          $scope.stateInteractionId ? (
+            ExplorationHtmlFormatterService.getInteractionHtml(
+              $scope.stateInteractionId,
+              $scope.stateInteractionCustomizationArgs, false)
+          ) : '');
         $scope.interactionCustomizationArgTranslatableContent = (
           $scope.getInteractionCustomizationArgTranslatableContents(
             $scope.stateInteractionCustomizationArgs)

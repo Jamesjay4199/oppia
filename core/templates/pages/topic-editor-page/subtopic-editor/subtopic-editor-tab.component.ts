@@ -23,7 +23,7 @@ require('domain/utilities/url-interpolation.service.ts');
 
 // TODO(#9186): Change variable name to 'constants' once this file
 // is migrated to Angular.
-const subtopicConstants2 = require('constants.ts');
+import subtopicConstants2 from 'assets/constants';
 
 require('domain/question/question-backend-api.service.ts');
 require('domain/topic/topic-update.service.ts');
@@ -64,6 +64,9 @@ angular.module('oppia').component('subtopicEditorTab', {
           TopicEditorStateService.getClassroomUrlFragment());
         ctrl.subtopicId = TopicEditorRoutingService.getSubtopicIdFromUrl();
         ctrl.subtopic = ctrl.topic.getSubtopicById(ctrl.subtopicId);
+        if (!ctrl.subtopic) {
+          TopicEditorRoutingService.navigateToMainTab();
+        }
         ctrl.errorMsg = null;
         ctrl.subtopicUrlFragmentExists = false;
         ctrl.subtopicUrlFragmentIsValid = false;
@@ -289,8 +292,9 @@ angular.module('oppia').component('subtopicEditorTab', {
           TopicEditorStateService.onTopicReinitialized.subscribe(
             () => ctrl.initEditor()
           ));
-
-        ctrl.initEditor();
+        if (TopicEditorStateService.hasLoadedTopic()) {
+          ctrl.initEditor();
+        }
       };
       ctrl.$onDestroy = function() {
         ctrl.directiveSubscriptions.unsubscribe();

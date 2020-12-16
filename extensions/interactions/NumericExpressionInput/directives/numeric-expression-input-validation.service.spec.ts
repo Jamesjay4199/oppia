@@ -29,13 +29,14 @@ import { Rule, RuleObjectFactory } from
   'domain/exploration/RuleObjectFactory';
 import { NumericExpressionInputCustomizationArgs } from
   'extensions/interactions/customization-args-defs';
+import { SubtitledUnicode } from
+  'domain/exploration/SubtitledUnicodeObjectFactory.ts';
 
 import { AppConstants } from 'app.constants';
-import { WARNING_TYPES_CONSTANT } from 'app-type.constants';
 
 describe('NumericExpressionInputValidationService', () => {
   let validatorService: NumericExpressionInputValidationService;
-  let WARNING_TYPES: WARNING_TYPES_CONSTANT;
+  let WARNING_TYPES: typeof AppConstants.WARNING_TYPES;
 
   let currentState: string;
   let answerGroups: AnswerGroup[], goodDefaultOutcome: Outcome;
@@ -69,7 +70,12 @@ describe('NumericExpressionInputValidationService', () => {
       missing_prerequisite_skill_id: null
     });
 
-    customizationArgs = {};
+    customizationArgs = {
+      placeholder: {
+        value: new SubtitledUnicode(
+          'Type an expression here, using only numbers.', 'ca_placeholder_0')
+      }
+    };
 
     isEquivalentTo = rof.createFromBackendDict({
       rule_type: 'IsEquivalentTo',

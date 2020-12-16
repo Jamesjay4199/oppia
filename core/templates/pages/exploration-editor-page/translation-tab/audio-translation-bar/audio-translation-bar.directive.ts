@@ -76,11 +76,11 @@ interface AudioTranslationBarCustomScope extends ng.IScope {
 }
 
 angular.module('oppia').directive('audioTranslationBar', [
-  'UrlInterpolationService', 'UserExplorationPermissionsService',
-  'UserService',
+  '$rootScope', 'UrlInterpolationService',
+  'UserExplorationPermissionsService', 'UserService',
   function(
-      UrlInterpolationService, UserExplorationPermissionsService,
-      UserService) {
+      $rootScope, UrlInterpolationService,
+      UserExplorationPermissionsService, UserService) {
     return {
       restrict: 'E',
       scope: {
@@ -99,6 +99,9 @@ angular.module('oppia').directive('audioTranslationBar', [
             scope.dropAreaIsAccessible = permissions.canVoiceover;
             scope.userIsGuest = !userIsLoggedIn;
             scope.$digest();
+            // TODO(#8521): Remove the use of $rootScope.$apply()
+            // once the controller is migrated to angular.
+            $rootScope.$applyAsync();
             return false;
           });
         });
@@ -136,7 +139,7 @@ angular.module('oppia').directive('audioTranslationBar', [
         '/pages/exploration-editor-page/translation-tab/' +
         'audio-translation-bar/audio-translation-bar.directive.html'),
       controller: [
-        '$filter', '$interval', '$scope', '$uibModal', '$window',
+        '$filter', '$interval', '$q', '$scope', '$uibModal', '$window',
         'AlertsService', 'AssetsBackendApiService', 'AudioPlayerService',
         'ContextService', 'EditabilityService',
         'ExplorationStatesService', 'ExternalSaveService',
@@ -146,7 +149,7 @@ angular.module('oppia').directive('audioTranslationBar', [
         'TranslationTabActiveContentIdService', 'VoiceoverRecordingService',
         'RECORDING_TIME_LIMIT',
         function(
-            $filter, $interval, $scope, $uibModal, $window,
+            $filter, $interval, $q, $scope, $uibModal, $window,
             AlertsService, AssetsBackendApiService, AudioPlayerService,
             ContextService, EditabilityService,
             ExplorationStatesService, ExternalSaveService,
@@ -309,9 +312,10 @@ angular.module('oppia').directive('audioTranslationBar', [
             var recordedAudioFile = new File(
               [$scope.audioBlob], filename, {type: fileType});
             $scope.showRecorderWarning = false;
-            AssetsBackendApiService.saveAudio(
-              ContextService.getExplorationId(), filename,
-              recordedAudioFile).then(function(response) {
+            $q.when(
+              AssetsBackendApiService.saveAudio(
+                ContextService.getExplorationId(), filename, recordedAudioFile)
+            ).then(function(response) {
               if ($scope.audioIsUpdating) {
                 StateRecordedVoiceoversService.displayed.deleteVoiceover(
                   contentId, languageCode);
@@ -407,7 +411,7 @@ angular.module('oppia').directive('audioTranslationBar', [
             var audioTranslation = getAvailableAudio(
               $scope.contentId, $scope.languageCode);
             if (audioTranslation) {
-              AudioPlayerService.load(audioTranslation.filename)
+              $q.when(AudioPlayerService.load(audioTranslation.filename))
                 .then(function() {
                   $scope.audioLoadingIndicatorIsShown = false;
                   $scope.audioIsLoading = false;

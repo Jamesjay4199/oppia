@@ -34,6 +34,7 @@ import argparse
 import collections
 import os
 import pprint
+import re
 import shutil
 import subprocess
 import sys
@@ -42,6 +43,7 @@ import sys
 # the current working directory so that Git knows where to find python_utils.
 sys.path.append(os.getcwd())
 from scripts import common  # isort:skip  # pylint: disable=wrong-import-position
+from scripts import install_backend_python_libs # isort:skip  # pylint: disable=wrong-import-position
 import python_utils  # isort:skip  # pylint: disable=wrong-import-position
 
 GitRef = collections.namedtuple(
@@ -58,13 +60,9 @@ OPPIA_DIR = os.path.join(FILE_DIR, os.pardir, os.pardir)
 LINTER_FILE_FLAG = '--files'
 PYTHON_CMD = 'python'
 OPPIA_PARENT_DIR = os.path.join(FILE_DIR, os.pardir, os.pardir, os.pardir)
-NPM_CMD = os.path.join(
-    OPPIA_PARENT_DIR, 'oppia_tools', 'node-10.18.0', 'bin', 'npm')
-YARN_CMD = os.path.join(
-    OPPIA_PARENT_DIR, 'oppia_tools', 'yarn-v1.22.0', 'bin', 'yarn')
 FRONTEND_TEST_CMDS = [
     PYTHON_CMD, '-m', 'scripts.run_frontend_tests', '--check_coverage']
-TRAVIS_CI_PROTRACTOR_CHECK_CMDS = [
+CI_PROTRACTOR_CHECK_CMDS = [
     PYTHON_CMD, '-m', 'scripts.check_e2e_tests_are_captured_in_ci']
 TYPESCRIPT_CHECKS_CMDS = [PYTHON_CMD, '-m', 'scripts.typescript_checks']
 STRICT_TYPESCRIPT_CHECKS_CMDS = [
@@ -199,6 +197,31 @@ def git_diff_name_status(left, right, diff_filter=''):
         raise ValueError(err)
 
 
+def get_merge_base(branch, other_branch):
+    """Returns the most-recent commit shared by both branches. Order doesn't
+    matter.
+
+    The commit returned is the same one used on GitHub's UI for comparing pull
+    requests.
+
+    Args:
+        branch: str. A branch name or commit hash.
+        other_branch: str. A branch name or commit hash.
+
+    Returns:
+        str. The common commit hash shared by both branches.
+
+    Raises:
+        ValueError. An error occurred in the git command.
+    """
+    merge_base, err = start_subprocess_for_result(
+        ['git', 'merge-base', branch, other_branch])
+    if err:
+        raise ValueError(err)
+    else:
+        return merge_base.strip()
+
+
 def compare_to_remote(remote, local_branch, remote_branch=None):
     """Compare local with remote branch with git diff.
 
@@ -219,7 +242,10 @@ def compare_to_remote(remote, local_branch, remote_branch=None):
     git_remote = '%s/%s' % (remote, remote_branch)
     # Ensure that references to the remote branches exist on the local machine.
     start_subprocess_for_result(['git', 'pull', remote])
-    return git_diff_name_status(git_remote, local_branch)
+    # Only compare differences to the merge base of the local and remote
+    # branches (what GitHub shows in the files tab of pull requests).
+    return git_diff_name_status(
+        get_merge_base(git_remote, local_branch), local_branch)
 
 
 def extract_files_to_lint(file_diffs):
@@ -393,21 +419,53 @@ def does_diff_include_ts_files(diff_files):
     return False
 
 
-def does_diff_include_travis_yml_or_js_files(diff_files):
-    """Returns true if diff includes .travis.yml or Javascript files.
+def does_diff_include_ci_config_or_js_files(diff_files):
+    """Returns true if diff includes CI config or Javascript files.
 
     Args:
         diff_files: list(str). List of files changed.
 
     Returns:
-        bool. Whether the diff contains changes in travis.yml or
+        bool. Whether the diff contains changes in CI config or
         Javascript files.
     """
 
     for file_path in diff_files:
-        if file_path.endswith('.js') or file_path.endswith('.travis.yml'):
+        if file_path.endswith('.js') or re.search(r'e2e_.*\.yml', file_path):
             return True
     return False
+
+
+def check_for_backend_python_library_inconsistencies():
+    """Checks the state of the 'third_party/python_libs' folder and compares it
+    to the required libraries specified in 'requirements.txt'.
+    If any inconsistencies are found, the script displays the inconsistencies
+    and exits.
+    """
+    mismatches = install_backend_python_libs.get_mismatches()
+
+    if mismatches:
+        python_utils.PRINT(
+            'Your currently installed python libraries do not match the\n'
+            'libraries listed in your "requirements.txt" file. Here is a\n'
+            'full list of library/version discrepancies:\n')
+
+        python_utils.PRINT(
+            '{:<35} |{:<25}|{:<25}'.format(
+                'Library', 'Requirements Version',
+                'Currently Installed Version'))
+        for library_name, version_strings in mismatches.items():
+            python_utils.PRINT('{:<35} |{:<25}|{:<25}'.format(
+                library_name, version_strings[0], version_strings[1]))
+        python_utils.PRINT('\n')
+        common.print_each_string_after_two_new_lines([
+            'Please fix these discrepancies by editing the `requirements.in`\n'
+            'file or running `scripts.install_third_party` to regenerate\n'
+            'the `third_party/python_libs` directory.\n'])
+        sys.exit(1)
+    else:
+        python_utils.PRINT(
+            'Python dependencies consistency check succeeded.')
 
 
 def main(args=None):
@@ -435,6 +493,9 @@ def main(args=None):
             'Your repo is in a dirty state which prevents the linting from'
             ' working.\nStash your changes or commit them.\n')
         sys.exit(1)
+
+    check_for_backend_python_library_inconsistencies()
+
     for branch, (modified_files, files_to_lint) in collected_files.items():
         with ChangedBranch(branch):
             if not modified_files and not files_to_lint:
@@ -466,7 +527,7 @@ def main(args=None):
                 sys.exit(1)
 
             frontend_status = 0
-            travis_ci_check_status = 0
+            ci_check_status = 0
             if does_diff_include_js_or_ts_files(files_to_lint):
                 frontend_status = run_script_and_get_returncode(
                     FRONTEND_TEST_CMDS)
@@ -474,10 +535,10 @@ def main(args=None):
                 python_utils.PRINT(
                     'Push aborted due to failing frontend tests.')
                 sys.exit(1)
-            if does_diff_include_travis_yml_or_js_files(files_to_lint):
-                travis_ci_check_status = run_script_and_get_returncode(
-                    TRAVIS_CI_PROTRACTOR_CHECK_CMDS)
-            if travis_ci_check_status != 0:
+            if does_diff_include_ci_config_or_js_files(files_to_lint):
+                ci_check_status = run_script_and_get_returncode(
+                    CI_PROTRACTOR_CHECK_CMDS)
+            if ci_check_status != 0:
                 python_utils.PRINT(
                     'Push aborted due to failing e2e test configuration check.')
                 sys.exit(1)

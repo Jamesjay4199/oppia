@@ -19,17 +19,14 @@
 
 import { EventEmitter } from '@angular/core';
 
-import { UpgradedServices } from 'services/UpgradedServices';
+import { importAllAngularServices } from 'tests/unit-test-utils';
 
 describe('Subtopic editor tab', function() {
+  importAllAngularServices();
+
   beforeEach(angular.mock.module('oppia'));
 
-  beforeEach(angular.mock.module('oppia', function($provide) {
-    var ugs = new UpgradedServices();
-    for (let [key, value] of Object.entries(ugs.getUpgradedServices())) {
-      $provide.value(key, value);
-    }
-  }));
+  importAllAngularServices();
   var ctrl = null;
   var skillSummary = null;
   var TopicEditorStateService = null;
@@ -43,6 +40,7 @@ describe('Subtopic editor tab', function() {
   var MockWindowDimensionsService = {
     isWindowNarrow: () => false
   };
+  var $location = null;
 
   var topicInitializedEventEmitter = null;
   var topicReinitializedEventEmitter = null;
@@ -57,6 +55,7 @@ describe('Subtopic editor tab', function() {
     ShortSkillSummaryObjectFactory = $injector.get(
       'ShortSkillSummaryObjectFactory');
     TopicObjectFactory = $injector.get('TopicObjectFactory');
+    $location = $injector.get('$location');
 
     var MockQuestionBackendApiService = {
       fetchTotalQuestionCountForSkillIds: () => Promise.resolve(2)
@@ -84,20 +83,21 @@ describe('Subtopic editor tab', function() {
         return topicReinitializedEventEmitter;
       });
 
-    topic.getSubtopicById = function() {
-      return subtopic;
+    topic.getSubtopicById = function(id) {
+      return id === 99 ? null : subtopic;
     };
     spyOn(TopicEditorStateService, 'getTopic').and.returnValue(topic);
+    spyOn(TopicEditorStateService, 'hasLoadedTopic').and.returnValue(true);
     spyOn(
       TopicEditorStateService,
       'getSubtopicPage').and.returnValue(subtopicPage);
-    spyOn(TopicEditorRoutingService, 'getSubtopicIdFromUrl')
-      .and.returnValue('1');
+    $location.path('/subtopic_editor/1');
     ctrl = $componentController('subtopicEditorTab', {
       QuestionBackendApiService: MockQuestionBackendApiService,
       WindowDimensionsService: MockWindowDimensionsService
     });
     ctrl.$onInit();
+    ctrl.initEditor();
   }));
 
   afterEach(() => {
@@ -334,5 +334,12 @@ describe('Subtopic editor tab', function() {
     ctrl.schemaEditorIsShown = true;
     ctrl.cancelHtmlDataChange();
     expect(ctrl.schemaEditorIsShown).toEqual(false);
+  });
+
+  it('should redirect to topic editor if subtopic id is invalid', function() {
+    var navigateSpy = spyOn(TopicEditorRoutingService, 'navigateToMainTab');
+    $location.path('/subtopic_editor/99');
+    ctrl.initEditor();
+    expect(navigateSpy).toHaveBeenCalled();
   });
 });

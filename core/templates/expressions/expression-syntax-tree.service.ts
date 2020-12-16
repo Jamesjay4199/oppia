@@ -19,18 +19,18 @@
 import { downgradeInjectable } from '@angular/upgrade/static';
 import { Injectable } from '@angular/core';
 
-import { AppConstants } from 'app.constants';
 import { ExpressionParserService } from
   'expressions/expression-parser.service.ts';
 
-interface SystemEnv {
-  eval: (args: string[]) => number | boolean | string;
-  getType: (args: string[]) => string;
+export type Expr = string | number | boolean;
+
+export interface SystemEnv {
+  eval: (args: Expr[]) => Expr;
 }
 
-type Env = SystemEnv | string | number;
+export type Env = SystemEnv | Expr;
 
-interface EnvDict {
+export interface EnvDict {
   [param: string]: Env;
 }
 
@@ -67,8 +67,11 @@ export class ExprWrongArgTypeError extends ExpressionError {
   constructor(
       public arg: number|string,
       public actualType: string, public expectedType: string) {
-    super((arg !== null ? (arg + ' has type ' + actualType + ' which') : (
-      'Type ' + actualType)) + ' does not match expected type ' + expectedType);
+    super(
+      (
+        arg !== null ?
+        (arg + ' has type ' + actualType + ' which') : ('Type ' + actualType)) +
+      ' does not match expected type ' + expectedType);
   }
 }
 
@@ -87,9 +90,8 @@ export class ExpressionSyntaxTreeService {
   }
 
   public applyFunctionToParseTree(
-      parsed: (string | string[])[], envs: EnvDict[],
-      func: (
-        parsed: (string | string[])[], envs: EnvDict[]) => string): string {
+      parsed: Expr | Expr[], envs: EnvDict[],
+      func: (parsed: Expr | Expr[], envs: EnvDict[]) => Expr): Expr {
     return func(parsed, envs.concat(this.system));
   }
 
@@ -104,7 +106,7 @@ export class ExpressionSyntaxTreeService {
     throw new ExprUndefinedVarError(name, envs);
   }
 
-  private findParams(parseTree: string[]|string): Set<string> {
+  private findParams(parseTree: string | string[]): Set<string> {
     const paramsFound = new Set<string>();
     if (parseTree instanceof Array) {
       if (parseTree[0] === '#') {
@@ -126,21 +128,6 @@ export class ExpressionSyntaxTreeService {
       expectedMin: number, expectedMax: number = expectedMin): void {
     if (args.length < expectedMin || args.length > expectedMax) {
       throw new ExprWrongNumArgsError(args, expectedMin, expectedMax);
-    }
-  }
-
-  private verifyArgTypesMatchExpectedType(
-      argTypes: string[], expectedType: string): void {
-    for (const argType of argTypes) {
-      if (argType !== expectedType) {
-        throw new ExprWrongArgTypeError(null, argType, expectedType);
-      }
-    }
-  }
-
-  private verifyArgTypesMatch(argType1: string, argType2: string): void {
-    if (argType1 !== argType2) {
-      throw new ExprWrongArgTypeError(null, argType1, argType2);
     }
   }
 
@@ -167,8 +154,7 @@ export class ExpressionSyntaxTreeService {
   //
   // Arguments:
   //    for eval(): list of values of the evaluated sub-expression.
-  //    for getType(): list of types of the evaluated sub-expression.
-  private system = {
+  private system: {[name: string]: SystemEnv} = {
     '+': {
       eval: (args: string[]): number => {
         this.verifyNumArgs(args, 1, 2);
@@ -176,12 +162,6 @@ export class ExpressionSyntaxTreeService {
         return numericArgs.length === 1 ?
           numericArgs[0] :
           numericArgs[0] + numericArgs[1];
-      },
-      getType: (args: string[]): string => {
-        this.verifyNumArgs(args, 1, 2);
-        this.verifyArgTypesMatchExpectedType(
-          args, AppConstants.PARAMETER_TYPES.REAL);
-        return AppConstants.PARAMETER_TYPES.REAL;
       }
     },
 
@@ -192,12 +172,6 @@ export class ExpressionSyntaxTreeService {
         return numericArgs.length === 1 ?
           -numericArgs[0] :
           numericArgs[0] - numericArgs[1];
-      },
-      getType: (args: string[]): string => {
-        this.verifyNumArgs(args, 1, 2);
-        this.verifyArgTypesMatchExpectedType(
-          args, AppConstants.PARAMETER_TYPES.REAL);
-        return AppConstants.PARAMETER_TYPES.REAL;
       }
     },
 
@@ -206,12 +180,6 @@ export class ExpressionSyntaxTreeService {
         this.verifyNumArgs(args, 2);
         const numericArgs = this.coerceAllArgsToNumber(args);
         return numericArgs[0] * numericArgs[1];
-      },
-      getType: (args: string[]): string => {
-        this.verifyNumArgs(args, 2);
-        this.verifyArgTypesMatchExpectedType(
-          args, AppConstants.PARAMETER_TYPES.REAL);
-        return AppConstants.PARAMETER_TYPES.REAL;
       }
     },
 
@@ -220,12 +188,6 @@ export class ExpressionSyntaxTreeService {
         this.verifyNumArgs(args, 2);
         const numericArgs = this.coerceAllArgsToNumber(args);
         return numericArgs[0] / numericArgs[1];
-      },
-      getType: (args: string[]): string => {
-        this.verifyNumArgs(args, 2);
-        this.verifyArgTypesMatchExpectedType(
-          args, AppConstants.PARAMETER_TYPES.REAL);
-        return AppConstants.PARAMETER_TYPES.REAL;
       }
     },
 
@@ -234,12 +196,6 @@ export class ExpressionSyntaxTreeService {
         this.verifyNumArgs(args, 2);
         const numericArgs = this.coerceAllArgsToNumber(args);
         return numericArgs[0] % numericArgs[1];
-      },
-      getType: (args: string[]): string => {
-        this.verifyNumArgs(args, 2);
-        this.verifyArgTypesMatchExpectedType(
-          args, AppConstants.PARAMETER_TYPES.REAL);
-        return AppConstants.PARAMETER_TYPES.REAL;
       }
     },
 
@@ -248,12 +204,6 @@ export class ExpressionSyntaxTreeService {
         this.verifyNumArgs(args, 2);
         const numericArgs = this.coerceAllArgsToNumber(args);
         return numericArgs[0] <= numericArgs[1];
-      },
-      getType: (args: string[]): string => {
-        this.verifyNumArgs(args, 2);
-        this.verifyArgTypesMatchExpectedType(
-          args, AppConstants.PARAMETER_TYPES.REAL);
-        return AppConstants.PARAMETER_TYPES.UNICODE_STRING;
       }
     },
 
@@ -262,12 +212,6 @@ export class ExpressionSyntaxTreeService {
         this.verifyNumArgs(args, 2);
         const numericArgs = this.coerceAllArgsToNumber(args);
         return numericArgs[0] >= numericArgs[1];
-      },
-      getType: (args: string[]): string => {
-        this.verifyNumArgs(args, 2);
-        this.verifyArgTypesMatchExpectedType(
-          args, AppConstants.PARAMETER_TYPES.REAL);
-        return AppConstants.PARAMETER_TYPES.UNICODE_STRING;
       }
     },
 
@@ -276,12 +220,6 @@ export class ExpressionSyntaxTreeService {
         this.verifyNumArgs(args, 2);
         const numericArgs = this.coerceAllArgsToNumber(args);
         return numericArgs[0] < numericArgs[1];
-      },
-      getType: (args: string[]): string => {
-        this.verifyNumArgs(args, 2);
-        this.verifyArgTypesMatchExpectedType(
-          args, AppConstants.PARAMETER_TYPES.REAL);
-        return AppConstants.PARAMETER_TYPES.UNICODE_STRING;
       }
     },
 
@@ -290,12 +228,6 @@ export class ExpressionSyntaxTreeService {
         this.verifyNumArgs(args, 2);
         const numericArgs = this.coerceAllArgsToNumber(args);
         return numericArgs[0] > numericArgs[1];
-      },
-      getType: (args: string[]): string => {
-        this.verifyNumArgs(args, 2);
-        this.verifyArgTypesMatchExpectedType(
-          args, AppConstants.PARAMETER_TYPES.REAL);
-        return AppConstants.PARAMETER_TYPES.UNICODE_STRING;
       }
     },
 
@@ -303,12 +235,6 @@ export class ExpressionSyntaxTreeService {
       eval: (args: string[]): boolean => {
         this.verifyNumArgs(args, 1);
         return !args[0];
-      },
-      getType: (args: string[]): string => {
-        this.verifyNumArgs(args, 1);
-        this.verifyArgTypesMatchExpectedType(
-          args, AppConstants.PARAMETER_TYPES.UNICODE_STRING);
-        return AppConstants.PARAMETER_TYPES.UNICODE_STRING;
       }
     },
 
@@ -316,10 +242,6 @@ export class ExpressionSyntaxTreeService {
       eval: (args: string[]): boolean => {
         this.verifyNumArgs(args, 2);
         return args[0] === args[1];
-      },
-      getType: (args: string[]): string => {
-        this.verifyNumArgs(args, 2);
-        return AppConstants.PARAMETER_TYPES.UNICODE_STRING;
       }
     },
 
@@ -327,10 +249,6 @@ export class ExpressionSyntaxTreeService {
       eval: (args: string[]): boolean => {
         this.verifyNumArgs(args, 2);
         return args[0] !== args[1];
-      },
-      getType: (args: string[]): string => {
-        this.verifyNumArgs(args, 2);
-        return AppConstants.PARAMETER_TYPES.UNICODE_STRING;
       }
     },
 
@@ -338,12 +256,6 @@ export class ExpressionSyntaxTreeService {
       eval: (args: string[]): boolean => {
         this.verifyNumArgs(args, 2);
         return Boolean(args[0] && args[1]);
-      },
-      getType: (args: string[]): string => {
-        this.verifyNumArgs(args, 2);
-        this.verifyArgTypesMatchExpectedType(
-          args, AppConstants.PARAMETER_TYPES.UNICODE_STRING);
-        return AppConstants.PARAMETER_TYPES.UNICODE_STRING;
       }
     },
 
@@ -351,12 +263,6 @@ export class ExpressionSyntaxTreeService {
       eval: (args: string[]): boolean => {
         this.verifyNumArgs(args, 2);
         return Boolean(args[0] || args[1]);
-      },
-      getType: (args: string[]): string => {
-        this.verifyNumArgs(args, 2);
-        this.verifyArgTypesMatchExpectedType(
-          args, AppConstants.PARAMETER_TYPES.UNICODE_STRING);
-        return AppConstants.PARAMETER_TYPES.UNICODE_STRING;
       }
     },
 
@@ -366,13 +272,6 @@ export class ExpressionSyntaxTreeService {
       eval: (args: string[]): string => {
         this.verifyNumArgs(args, 3);
         return args[0] ? args[1] : args[2];
-      },
-      getType: (args: string[]): string => {
-        this.verifyNumArgs(args, 3);
-        this.verifyArgTypesMatchExpectedType(
-          [args[0]], AppConstants.PARAMETER_TYPES.UNICODE_STRING);
-        this.verifyArgTypesMatch(args[1], args[2]);
-        return args[1];
       }
     },
 
@@ -381,12 +280,6 @@ export class ExpressionSyntaxTreeService {
         this.verifyNumArgs(args, 1);
         const numericArgs = this.coerceAllArgsToNumber(args);
         return Math.floor(numericArgs[0]);
-      },
-      getType: (args: string[]): string => {
-        this.verifyNumArgs(args, 1);
-        this.verifyArgTypesMatchExpectedType(
-          args, AppConstants.PARAMETER_TYPES.REAL);
-        return AppConstants.PARAMETER_TYPES.REAL;
       }
     },
 
@@ -395,12 +288,6 @@ export class ExpressionSyntaxTreeService {
         this.verifyNumArgs(args, 2);
         const numericArgs = this.coerceAllArgsToNumber(args);
         return Math.pow(numericArgs[0], numericArgs[1]);
-      },
-      getType: (args: string[]): string => {
-        this.verifyNumArgs(args, 2);
-        this.verifyArgTypesMatchExpectedType(
-          args, AppConstants.PARAMETER_TYPES.REAL);
-        return AppConstants.PARAMETER_TYPES.REAL;
       }
     },
 
@@ -412,12 +299,6 @@ export class ExpressionSyntaxTreeService {
         // We round answers to 9 decimal places, so that we don't run into
         // issues like log(9, 3) = 2.0000000000004.
         return Math.round(preciseAns * Math.pow(10, 9)) / Math.pow(10, 9);
-      },
-      getType: (args: string[]): string => {
-        this.verifyNumArgs(args, 2);
-        this.verifyArgTypesMatchExpectedType(
-          args, AppConstants.PARAMETER_TYPES.REAL);
-        return AppConstants.PARAMETER_TYPES.REAL;
       }
     },
 
@@ -426,12 +307,6 @@ export class ExpressionSyntaxTreeService {
         this.verifyNumArgs(args, 1);
         const numericArgs = this.coerceAllArgsToNumber(args);
         return Math.abs(numericArgs[0]);
-      },
-      getType: (args: string[]): string => {
-        this.verifyNumArgs(args, 1);
-        this.verifyArgTypesMatchExpectedType(
-          args, AppConstants.PARAMETER_TYPES.REAL);
-        return AppConstants.PARAMETER_TYPES.REAL;
       }
     }
   };

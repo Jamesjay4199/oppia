@@ -26,14 +26,19 @@ require(
   'translation-language.service.ts');
 require('services/alerts.service.ts');
 require('services/context.service.ts');
+require('components/ck-editor-helpers/ck-editor-copy-content-service.ts');
+require('services/image-local-storage.service.ts');
+require('services/site-analytics.service.ts');
 
 angular.module('oppia').controller('TranslationModalController', [
   '$controller', '$scope', '$uibModalInstance', 'AlertsService',
-  'ContextService', 'TranslateTextService', 'TranslationLanguageService',
+  'CkEditorCopyContentService', 'ContextService', 'ImageLocalStorageService',
+  'SiteAnalyticsService', 'TranslateTextService', 'TranslationLanguageService',
   'opportunity', 'ENTITY_TYPE',
   function(
       $controller, $scope, $uibModalInstance, AlertsService,
-      ContextService, TranslateTextService, TranslationLanguageService,
+      CkEditorCopyContentService, ContextService, ImageLocalStorageService,
+      SiteAnalyticsService, TranslateTextService, TranslationLanguageService,
       opportunity, ENTITY_TYPE) {
     $controller('ConfirmOrCancelModalController', {
       $scope: $scope,
@@ -43,6 +48,8 @@ angular.module('oppia').controller('TranslationModalController', [
     // images for the given ENTITY_TYPE and targetId.
     ContextService.setCustomEntityContext(
       ENTITY_TYPE.EXPLORATION, opportunity.id);
+
+    ContextService.setImageSaveDestinationToLocalStorage();
     $scope.uploadingTranslation = false;
     $scope.activeWrittenTranslation = {};
     $scope.activeWrittenTranslation.html = '';
@@ -70,6 +77,17 @@ angular.module('oppia').controller('TranslationModalController', [
         $scope.loadingData = false;
       });
 
+    $scope.onContentClick = function($event) {
+      if ($scope.isCopyModeActive()) {
+        $event.stopPropagation();
+      }
+      CkEditorCopyContentService.broadcastCopy($event.target);
+    };
+
+    $scope.isCopyModeActive = function() {
+      return CkEditorCopyContentService.copyModeActive;
+    };
+
     $scope.skipActiveTranslation = function() {
       var textAndAvailability = (
         TranslateTextService.getTextToTranslate());
@@ -80,11 +98,16 @@ angular.module('oppia').controller('TranslationModalController', [
 
     $scope.suggestTranslatedText = function() {
       if (!$scope.uploadingTranslation && !$scope.loadingData) {
+        SiteAnalyticsService.registerContributorDashboardSubmitSuggestionEvent(
+          'Translation');
         $scope.uploadingTranslation = true;
+        var imagesData = ImageLocalStorageService.getStoredImagesData();
+        ImageLocalStorageService.flushStoredImagesData();
+        ContextService.resetImageSaveDestination();
         TranslateTextService.suggestTranslatedText(
           $scope.activeWrittenTranslation.html,
           TranslationLanguageService.getActiveLanguageCode(),
-          function() {
+          imagesData, function() {
             AlertsService.addSuccessMessage(
               'Submitted translation for review.');
             if ($scope.moreAvailable) {

@@ -18,6 +18,8 @@
  */
 
 var until = protractor.ExpectedConditions;
+var fs = require('fs');
+var Constants = require('./ProtractorConstants');
 // When running tests on mobile via browserstack, the localhost
 // might take some time to establish a connection with the
 // server since the mobile tests are run on a real
@@ -61,7 +63,7 @@ var pageToFullyLoad = async function() {
   // https://github.com/angular/angular.js/issues/14219#issuecomment-251605766
   // and browser.waitForAngular's flakiness
   // https://github.com/angular/protractor/issues/2954.
-  var loadingMessage = element(by.css('protractor-test-loading-fullpage'));
+  var loadingMessage = element(by.css('.protractor-test-loading-fullpage'));
   await browser.driver.wait(
     until.invisibilityOf(loadingMessage), 15000,
     'Page takes more than 15 secs to load');
@@ -148,7 +150,7 @@ var invisibilityOfInfoToast = async function(errorMessage) {
 };
 
 var visibilityOfSuccessToast = async function(errorMessage) {
-  await invisibilityOf(toastSuccessElement, errorMessage);
+  await visibilityOf(toastSuccessElement, errorMessage);
 };
 
 var modalPopupToAppear = async function() {
@@ -156,6 +158,17 @@ var modalPopupToAppear = async function() {
     element(by.css('.modal-body')), 'Modal taking too long to appear.');
 };
 
+/**
+ * Check if a file has been downloaded
+ */
+var fileToBeDownloaded = async function(filename) {
+  var name = Constants.DOWNLOAD_PATH + '/' + filename;
+  await browser.driver.wait(function() {
+    return fs.existsSync(name);
+  }, DEFAULT_WAIT_TIME_MSECS, 'File was not downloaded!');
+};
+
+exports.DEFAULT_WAIT_TIME_MSECS = DEFAULT_WAIT_TIME_MSECS;
 exports.alertToBePresent = alertToBePresent;
 exports.elementToBeClickable = elementToBeClickable;
 exports.invisibilityOf = invisibilityOf;
@@ -170,3 +183,4 @@ exports.invisibilityOfInfoToast = invisibilityOfInfoToast;
 exports.visibilityOfInfoToast = visibilityOfInfoToast;
 exports.visibilityOfSuccessToast = visibilityOfSuccessToast;
 exports.modalPopupToAppear = modalPopupToAppear;
+exports.fileToBeDownloaded = fileToBeDownloaded;

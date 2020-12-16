@@ -26,6 +26,7 @@ import re
 from constants import constants
 from core.domain import android_validation_constants
 from core.domain import change_domain
+from core.domain import subtopic_page_domain
 from core.domain import user_services
 import feconf
 import python_utils
@@ -53,6 +54,7 @@ TOPIC_PROPERTY_LANGUAGE_CODE = 'language_code'
 TOPIC_PROPERTY_URL_FRAGMENT = 'url_fragment'
 TOPIC_PROPERTY_META_TAG_CONTENT = 'meta_tag_content'
 TOPIC_PROPERTY_PRACTICE_TAB_IS_DISPLAYED = 'practice_tab_is_displayed'
+TOPIC_PROPERTY_PAGE_TITLE_FRAGMENT_FOR_WEB = 'page_title_fragment_for_web'
 
 SUBTOPIC_PROPERTY_TITLE = 'title'
 SUBTOPIC_PROPERTY_THUMBNAIL_FILENAME = 'thumbnail_filename'
@@ -116,7 +118,8 @@ class TopicChange(change_domain.BaseChange):
         TOPIC_PROPERTY_THUMBNAIL_BG_COLOR,
         TOPIC_PROPERTY_URL_FRAGMENT,
         TOPIC_PROPERTY_META_TAG_CONTENT,
-        TOPIC_PROPERTY_PRACTICE_TAB_IS_DISPLAYED)
+        TOPIC_PROPERTY_PRACTICE_TAB_IS_DISPLAYED,
+        TOPIC_PROPERTY_PAGE_TITLE_FRAGMENT_FOR_WEB)
 
     # The allowed list of subtopic properties which can be used in
     # update_subtopic_property command.
@@ -125,6 +128,11 @@ class TopicChange(change_domain.BaseChange):
         SUBTOPIC_PROPERTY_THUMBNAIL_FILENAME,
         SUBTOPIC_PROPERTY_THUMBNAIL_BG_COLOR,
         SUBTOPIC_PROPERTY_URL_FRAGMENT)
+
+    # The allowed list of subtopic page properties which can be used in
+    # update_subtopic_page_property command.
+    SUBTOPIC_PAGE_PROPERTIES = (
+        subtopic_page_domain.SubtopicPageChange.SUBTOPIC_PAGE_PROPERTIES)
 
     ALLOWED_COMMANDS = [{
         'name': CMD_CREATE_NEW,
@@ -214,6 +222,13 @@ class TopicChange(change_domain.BaseChange):
         'optional_attribute_names': [],
         'user_id_attribute_names': [],
         'allowed_values': {'property_name': SUBTOPIC_PROPERTIES}
+    }, {
+        'name': subtopic_page_domain.CMD_UPDATE_SUBTOPIC_PAGE_PROPERTY,
+        'required_attribute_names': [
+            'property_name', 'new_value', 'old_value', 'subtopic_id'],
+        'optional_attribute_names': [],
+        'user_id_attribute_names': [],
+        'allowed_values': {'property_name': SUBTOPIC_PAGE_PROPERTIES}
     }, {
         'name': CMD_UPDATE_TOPIC_PROPERTY,
         'required_attribute_names': ['property_name', 'new_value', 'old_value'],
@@ -467,7 +482,8 @@ class Topic(python_utils.OBJECT):
             uncategorized_skill_ids, subtopics, subtopic_schema_version,
             next_subtopic_id, language_code, version,
             story_reference_schema_version, meta_tag_content,
-            practice_tab_is_displayed, created_on=None,
+            practice_tab_is_displayed, page_title_fragment_for_web,
+            created_on=None,
             last_updated=None):
         """Constructs a Topic domain object.
 
@@ -501,6 +517,8 @@ class Topic(python_utils.OBJECT):
             meta_tag_content: str. The meta tag content in the topic viewer
                 page.
             practice_tab_is_displayed: bool. Whether the practice tab is shown.
+            page_title_fragment_for_web: str. The page title fragment in the
+                topic viewer page.
             created_on: datetime.datetime. Date and time when the topic is
                 created.
             last_updated: datetime.datetime. Date and time when the
@@ -527,6 +545,7 @@ class Topic(python_utils.OBJECT):
         self.story_reference_schema_version = story_reference_schema_version
         self.meta_tag_content = meta_tag_content
         self.practice_tab_is_displayed = practice_tab_is_displayed
+        self.page_title_fragment_for_web = page_title_fragment_for_web
 
     def to_dict(self):
         """Returns a dict representing this Topic domain object.
@@ -561,7 +580,8 @@ class Topic(python_utils.OBJECT):
             'story_reference_schema_version': (
                 self.story_reference_schema_version),
             'meta_tag_content': self.meta_tag_content,
-            'practice_tab_is_displayed': self.practice_tab_is_displayed
+            'practice_tab_is_displayed': self.practice_tab_is_displayed,
+            'page_title_fragment_for_web': self.page_title_fragment_for_web
         }
 
     def serialize(self):
@@ -635,6 +655,7 @@ class Topic(python_utils.OBJECT):
             topic_dict['story_reference_schema_version'],
             topic_dict['meta_tag_content'],
             topic_dict['practice_tab_is_displayed'],
+            topic_dict['page_title_fragment_for_web'],
             topic_created_on,
             topic_last_updated)
 
@@ -965,6 +986,8 @@ class Topic(python_utils.OBJECT):
                 'Practice tab is displayed property should be a boolean.'
                 'Received %s.' % self.practice_tab_is_displayed)
         utils.require_valid_meta_tag_content(self.meta_tag_content)
+        utils.require_valid_page_title_fragment_for_web(
+            self.page_title_fragment_for_web)
         if self.thumbnail_bg_color is not None and not (
                 self.require_valid_thumbnail_bg_color(self.thumbnail_bg_color)):
             raise utils.ValidationError(
@@ -1112,7 +1135,7 @@ class Topic(python_utils.OBJECT):
             description, [], [], [], [],
             feconf.CURRENT_SUBTOPIC_SCHEMA_VERSION, 1,
             constants.DEFAULT_LANGUAGE_CODE, 0,
-            feconf.CURRENT_STORY_REFERENCE_SCHEMA_VERSION, '', False)
+            feconf.CURRENT_STORY_REFERENCE_SCHEMA_VERSION, '', False, '')
 
     @classmethod
     def _convert_subtopic_v2_dict_to_v3_dict(cls, subtopic_dict):
@@ -1277,6 +1300,16 @@ class Topic(python_utils.OBJECT):
                 topic.
         """
         self.meta_tag_content = new_meta_tag_content
+
+    def update_page_title_fragment_for_web(
+            self, new_page_title_fragment_for_web):
+        """Updates the page title fragment of a topic object.
+
+        Args:
+            new_page_title_fragment_for_web: str. The updated page title
+                fragment for the topic.
+        """
+        self.page_title_fragment_for_web = new_page_title_fragment_for_web
 
     def update_practice_tab_is_displayed(self, new_practice_tab_is_displayed):
         """Updates the language code of a topic object.

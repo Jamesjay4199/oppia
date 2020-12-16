@@ -18,7 +18,7 @@
 
 // TODO(#7222): Remove the following block of unnnecessary imports once
 // App.ts is upgraded to Angular 8.
-import { UpgradedServices } from 'services/UpgradedServices';
+import { importAllAngularServices } from 'tests/unit-test-utils';
 
 import { EventEmitter } from '@angular/core';
 
@@ -62,12 +62,7 @@ describe('Story editor page', function() {
     $provide.value('$window', mockedWindow);
   }));
 
-  beforeEach(angular.mock.module('oppia', function($provide) {
-    var ugs = new UpgradedServices();
-    for (let [key, value] of Object.entries(ugs.getUpgradedServices())) {
-      $provide.value(key, value);
-    }
-  }));
+  importAllAngularServices();
 
   beforeEach(angular.mock.inject(function($injector, $componentController) {
     $q = $injector.get('$q');
@@ -157,6 +152,15 @@ describe('Story editor page', function() {
     ctrl.$onDestroy();
   });
 
+  it('should call confirm before leaving', function() {
+    spyOn(UndoRedoService, 'getChangeCount').and.returnValue(10);
+    spyOn(window, 'addEventListener');
+    ctrl.setUpBeforeUnload();
+    ctrl.confirmBeforeLeaving({returnValue: ''});
+    expect(window.addEventListener).toHaveBeenCalledWith(
+      'beforeunload', ctrl.confirmBeforeLeaving);
+  });
+
   it('should return to topic editor page when closing confirmation modal',
     function() {
       spyOn(UndoRedoService, 'getChangeCount').and.returnValue(1);
@@ -227,6 +231,9 @@ describe('Story editor page', function() {
     spyOn(
       StoryEditorStateService,
       'getStoryWithUrlFragmentExists').and.returnValue(true);
+    spyOn(StoryEditorStateService, 'getSkillSummaries').and.returnValue([{
+      id: 'skill_id'
+    }]);
     MockStoryEditorNavigationService.checkIfPresentInChapterEditor = () => true;
     ctrl.$onInit();
     expect(ctrl.validationIssues).toEqual(
@@ -301,7 +308,7 @@ describe('Story editor page', function() {
 
   it('should init page on undo redo change applied', () => {
     let mockUndoRedoChangeEventEmitter = new EventEmitter();
-    spyOn(UndoRedoService, 'onUndoRedoChangeApplied').and.returnValue(
+    spyOn(UndoRedoService, 'onUndoRedoChangeApplied$').and.returnValue(
       mockUndoRedoChangeEventEmitter);
     spyOn(UrlService, 'getStoryIdFromUrl').and.returnValue('story_1');
     spyOn(PageTitleService, 'setPageTitle');

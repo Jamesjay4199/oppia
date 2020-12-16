@@ -33,29 +33,29 @@ require(
   'pages/story-viewer-page/navbar-pre-logo-action/' +
   'story-viewer-navbar-pre-logo-action.component.ts');
 
-require('domain/story_viewer/StoryPlaythroughObjectFactory.ts');
 require('domain/story_viewer/story-viewer-backend-api.service.ts');
 require('services/alerts.service.ts');
 require('services/assets-backend-api.service.ts');
-require('services/page-title.service.ts');
 require('services/contextual/url.service.ts');
+require('services/user.service.ts');
 
 angular.module('oppia').component('storyViewerPage', {
   template: require('./story-viewer-page.component.html'),
   controller: [
-    '$rootScope', 'AlertsService', 'AssetsBackendApiService',
-    'LoaderService', 'PageTitleService', 'StoryViewerBackendApiService',
-    'UrlInterpolationService', 'UrlService', 'ENTITY_TYPE',
-    'FATAL_ERROR_CODES',
+    '$rootScope', '$window', 'AlertsService', 'AssetsBackendApiService',
+    'LoaderService', 'StoryViewerBackendApiService',
+    'UrlInterpolationService', 'UrlService', 'UserService',
+    'ENTITY_TYPE', 'FATAL_ERROR_CODES',
     function(
-        $rootScope, AlertsService, AssetsBackendApiService,
-        LoaderService, PageTitleService, StoryViewerBackendApiService,
-        UrlInterpolationService, UrlService, ENTITY_TYPE,
-        FATAL_ERROR_CODES) {
+        $rootScope, $window, AlertsService, AssetsBackendApiService,
+        LoaderService, StoryViewerBackendApiService,
+        UrlInterpolationService, UrlService, UserService,
+        ENTITY_TYPE, FATAL_ERROR_CODES) {
       var ctrl = this;
 
       ctrl.storyViewerBackendApiService = (
         OppiaAngularRootComponent.storyViewerBackendApiService);
+      ctrl.pageTitleService = OppiaAngularRootComponent.pageTitleService;
 
       ctrl.getStaticImageUrl = function(imagePath) {
         return UrlInterpolationService.getStaticImageUrl(imagePath);
@@ -106,6 +106,14 @@ angular.module('oppia').component('storyViewerPage', {
         return true;
       };
 
+      ctrl.signIn = function() {
+        UserService.getLoginUrlAsync().then(
+          loginUrl => {
+            loginUrl ? $window.location = loginUrl : (
+              $window.location.reload());
+          });
+      };
+
       ctrl.getExplorationUrl = function(node) {
         var result = '/explore/' + node.getExplorationId();
         result = UrlService.addField(
@@ -124,6 +132,13 @@ angular.module('oppia').component('storyViewerPage', {
 
       ctrl.$onInit = function() {
         ctrl.storyIsLoaded = false;
+        ctrl.isLoggedIn = false;
+        UserService.getUserInfoAsync().then(function(userInfo) {
+          ctrl.isLoggedIn = userInfo.isLoggedIn();
+          // TODO(#8521): Remove the use of $rootScope.$apply()
+          // once the controller is migrated to angular.
+          $rootScope.$applyAsync();
+        });
         LoaderService.showLoadingScreen('Loading');
         var topicUrlFragment = (
           UrlService.getTopicUrlFragmentFromLearnerUrl());
@@ -140,8 +155,10 @@ angular.module('oppia').component('storyViewerPage', {
             ctrl.storyPlaythroughObject = storyDataDict;
             ctrl.storyId = ctrl.storyPlaythroughObject.getStoryId();
             var topicName = ctrl.storyPlaythroughObject.topicName;
-            PageTitleService.setPageTitle(
+            ctrl.pageTitleService.setPageTitle(
               `Learn ${topicName} | ${storyDataDict.title} | Oppia`);
+            ctrl.pageTitleService.updateMetaTag(
+              storyDataDict.getMetaTagContent());
             ctrl.storyTitle = storyDataDict.title;
             ctrl.storyDescription = storyDataDict.description;
 
