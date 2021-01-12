@@ -46,7 +46,7 @@ angular.module('oppia').controller('CreateNewSubtopicModalController', [
     });
     var ctrl = this;
 
-    ctrl.init = function() {
+    ctrl.$onInit = function() {
       ctrl.hostname = WindowRef.nativeWindow.location.hostname;
       ctrl.classroomUrlFragment = (
         TopicEditorStateService.getClassroomUrlFragment());
@@ -78,7 +78,6 @@ angular.module('oppia').controller('CreateNewSubtopicModalController', [
       ctrl.schemaEditorIsShown = true;
     };
 
-    ctrl.init();
     ctrl.updateSubtopicThumbnailFilename = function(
         newThumbnailFilename) {
       ctrl.editableThumbnailFilename = newThumbnailFilename;
@@ -141,7 +140,7 @@ angular.module('oppia').controller('CreateNewSubtopicModalController', [
 
       var subtitledHtml = angular.copy(
         ctrl.subtopicPage.getPageContents().getSubtitledHtml());
-      subtitledHtml.setHtml(ctrl.htmlData);
+      subtitledHtml.html = ctrl.htmlData;
       TopicUpdateService.setSubtopicPageContentsHtml(
         ctrl.subtopicPage, ctrl.subtopicId, subtitledHtml);
       ctrl.subtopicPage.getPageContents().setHtml(ctrl.htmlData);
